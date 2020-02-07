@@ -111,7 +111,7 @@ def collect_gm_metadata(gm_files, results_filename, gm_group):
         gm_record_group.attrs['unscaled_sa_avg'] = gm_metadata.loc[gm_id, 'Unscaled Sa_avg']
 
         # acceleration time history
-        gm_acc_file = gm_acc_folder + '/' + gm_id + '.txt'
+        gm_acc_file = posixpath.join(gm_acc_folder, gm_id + '.txt')
         with open(gm_acc_file, 'r') as file:
             acc = np.array([float(x) for x in file.read().splitlines()])
         dset = gm_record_group.create_dataset('acceleration_time_history', data=acc)
@@ -139,7 +139,7 @@ def collect_ida_results(ida_folder, gm_metadata, results_filename, ida_results_g
         idx_number = gm_number - 1
 
         # read the ida curve
-        ida_intensities_file = ida_folder + '/' + gm_id + '/ida_curve.txt'
+        ida_intensities_file = posixpath.join(ida_folder, gm_id + '/ida_curve.txt')
         ida_curve = pd.read_csv(ida_intensities_file, sep='\t', header=None,
                                 names=['Sa(T1)', 'Interstory Drift Ratio (max)'])
         # add the collapse point
@@ -212,7 +212,7 @@ def collect_msa_results(msa_folder, gm_metadata, results_filename, msa_results_g
     # collect collapse matrix for every ground motion in every stripe
     for i in range(n_stripes):
         for j in range(n_gms):
-            msa_idr_file = msa_folder + '/' + stripe_folders[i] + '/' + gm_ids[j] + '/MSA.txt'
+            msa_idr_file = posixpath.join(msa_folder, stripe_folders[i], gm_ids[j] + '/MSA.txt')
             with open(msa_idr_file, 'r') as file:
                 peak_idr_matrix[j, i] = float(file.read())
 
@@ -303,16 +303,15 @@ def collect_damaged_results(damaged_folder, gm_metadata, results_filename, damag
                 gm_scale_group = create_damaged_gm_scale_group(damaged_group, gm_id, scale, gm_metadata)
                 scale_name = str(scale) + 'Col'
 
+                damaged_folder = posixpath.join(damaged_folder, gm_id + '_' + scale_name)
                 if result_type == 'msa_sa_avg':
-                    msa_folder = damaged_folder + '/' + gm_id + '_' + scale_name
                     msa_results_group = gm_scale_group.create_group('msa_sa_avg').name
-                    print(msa_folder)
-                    collect_msa_results(msa_folder, gm_metadata, results_filename, msa_results_group)
+                    print(damaged_folder)
+                    collect_msa_results(damaged_folder, gm_metadata, results_filename, msa_results_group)
                 elif result_type == 'ida':
-                    ida_folder = damaged_folder + '/' + gm_id + '_' + scale_name
                     ida_results_group = gm_scale_group.create_group('ida').name
-                    print(ida_folder)
-                    collect_ida_results(ida_folder, gm_metadata, results_filename, ida_results_group)
+                    print(damaged_folder)
+                    collect_ida_results(damaged_folder, gm_metadata, results_filename, ida_results_group)
                 else:
                     raise ValueError('Add code for result_type.')
 
@@ -372,7 +371,7 @@ def collect_mainshock_edp_results(edp_folder, building_group, edp_results_group)
     edp_list = ['drift', 'displacement']
 
     file_tag = '_disp.out'
-    filename = edp_folder + '/story1' + file_tag
+    filename = posixpath.join(edp_folder, 'story1' + file_tag)
     time_series = np.squeeze(pd.read_csv(filename, sep=' ', header=None).iloc[:, 0])
     edp_results_group.create_dataset('time_series', data=time_series)
 
@@ -387,7 +386,7 @@ def collect_mainshock_edp_results(edp_folder, building_group, edp_results_group)
 
             edp_results = np.zeros(n_levels)
             for i in range(n_levels):
-                filename = edp_folder + '/story' + str(i + 1) + file_tag
+                filename = posixpath.join(edp_folder, 'story' + str(i + 1) + file_tag)
                 edp_results[i] = pd.read_csv(filename, sep='\t', header=None).iloc[-1]
             dset = edp_results_group.create_dataset(edp_name, data=edp_results)
             dset.attrs['units'] = 'in/s^2'
@@ -397,12 +396,12 @@ def collect_mainshock_edp_results(edp_folder, building_group, edp_results_group)
             n_levels = n_stories
             file_tag = '_drift.out'
 
-            filename = edp_folder + '/story1' + file_tag
+            filename = posixpath.join(edp_folder, 'story1' + file_tag)
             n_pts = len(pd.read_csv(filename, sep='\t', header=None))
 
             edp_results = np.zeros((n_levels, n_pts))
             for i in range(n_levels):
-                filename = edp_folder + '/story' + str(i + 1) + file_tag
+                filename = posixpath.join(edp_folder, 'story' + str(i + 1) + file_tag)
                 time_history = pd.read_csv(filename, sep=' ', header=None)
                 #                 edp_results[i,:] = np.squeeze(time_history[:,-1])
                 edp_results[i, :] = np.squeeze(time_history.iloc[:])
@@ -423,12 +422,12 @@ def collect_mainshock_edp_results(edp_folder, building_group, edp_results_group)
             n_levels = n_stories
             file_tag = '_disp.out'
 
-            filename = edp_folder + '/story1' + file_tag
+            filename = posixpath.join(edp_folder, 'story1' + file_tag)
             n_pts = len(pd.read_csv(filename, sep='\t', header=None))
 
             edp_results = np.zeros((n_levels, n_pts))
             for i in range(n_levels):
-                filename = edp_folder + '/story' + str(i + 1) + file_tag
+                filename = posixpath.join(edp_folder, 'story' + str(i + 1) + file_tag)
                 time_history = pd.read_csv(filename, sep=' ', header=None)
                 edp_results[i, :] = np.squeeze(time_history.iloc[:, -1])
             dset = edp_results_group.create_dataset(edp_name, data=edp_results)

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import scipy.stats as stats
 import scipy.optimize as optimize
 import os
+import posixpath
 
 # set all single line variables to be displayed, not just the last line
 from IPython.core.interactiveshell import InteractiveShell
