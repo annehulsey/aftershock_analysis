@@ -303,15 +303,14 @@ def collect_damaged_results(damaged_folder, gm_metadata, results_filename, damag
                 gm_scale_group = create_damaged_gm_scale_group(damaged_group, gm_id, scale, gm_metadata)
                 scale_name = str(scale) + 'Col'
 
-                damaged_folder = posixpath.join(damaged_folder, gm_id + '_' + scale_name)
+                gm_scale_folder = posixpath.join(damaged_folder, gm_id + '_' + scale_name)
+                print(gm_scale_folder)
                 if result_type == 'msa_sa_avg':
                     msa_results_group = gm_scale_group.create_group('msa_sa_avg').name
-                    print(damaged_folder)
-                    collect_msa_results(damaged_folder, gm_metadata, results_filename, msa_results_group)
+                    collect_msa_results(gm_scale_folder, gm_metadata, results_filename, msa_results_group)
                 elif result_type == 'ida':
                     ida_results_group = gm_scale_group.create_group('ida').name
-                    print(damaged_folder)
-                    collect_ida_results(damaged_folder, gm_metadata, results_filename, ida_results_group)
+                    collect_ida_results(gm_scale_folder, gm_metadata, results_filename, ida_results_group)
                 else:
                     raise ValueError('Add code for result_type.')
 
