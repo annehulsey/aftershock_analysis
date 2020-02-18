@@ -7,6 +7,8 @@ import scipy.optimize as optimize
 import os
 import posixpath
 
+from IPython.display import display
+
 # set all single line variables to be displayed, not just the last line
 from IPython.core.interactiveshell import InteractiveShell
 InteractiveShell.ast_node_interactivity = "all"

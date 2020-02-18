@@ -181,6 +181,21 @@ def collect_ida_results(ida_folder, gm_metadata, results_filename, ida_results_g
     collapse_fragilities.to_hdf(results_filename, key=key)
 
 
+def collect_ida_polarity(gm_scale_folder, results_filename, ida_results_group):
+    folder_path = gm_scale_folder.split('AnalysisResult/IDA')
+    polarity_folder = folder_path[0] + 'GroundMotion' + folder_path[1]
+    polarity_file = posixpath.join(polarity_folder, 'GMafterInfo.txt')
+
+    polarity = pd.read_csv(polarity_file, sep=' ', header=None,
+                           names=['Record Number', 'Record Filename', 'dt', 'Polarity', 'empty'])
+    polarity['id'] = ['GM' + str(i) for i in polarity['Record Number']]
+    polarity.set_index('id', inplace=True)
+    polarity = polarity[['Polarity']].copy()
+
+    key = ida_results_group + '/aftershock_polarity'
+    polarity.to_hdf(results_filename, key=key)
+
+
 def compute_ida_fragility(collapse_ims, plot):
     n_gms = len(collapse_ims)
 
@@ -374,6 +389,7 @@ def collect_damaged_results(damaged_folder, gm_metadata, results_filename, damag
                         gm_scale_group = hf[gm_scale_group]
                         ida_results_group = gm_scale_group.create_group('ida').name
                     collect_ida_results(gm_scale_folder, gm_metadata, results_filename, ida_results_group)
+                    collect_ida_polarity(gm_scale_folder, results_filename, ida_results_group)
                 else:
                     raise ValueError('Add code for result_type.')
 
@@ -441,7 +457,14 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
 
     file_tag = '_disp.out'
     filename = posixpath.join(edp_folder, 'story1' + file_tag)
-    time_series = np.squeeze(pd.read_csv(filename, sep=' ', header=None).iloc[:, 0])
+    time_series = np.squeeze(pd.read_csv(filename, sep=' ', header=None).iloc[:, 0].values)
+    time_series = time_series[~np.isnan(time_series)]
+    n_pts = len(time_series)
+
+    residual_duration = 2.5
+    residual_start_time = time_series[-1] - residual_duration
+    residual_start_idx = np.searchsorted(time_series, residual_start_time)
+
     edp_results_group.create_dataset('time_series', data=time_series)
 
     building_group = hf[building_group]
@@ -466,15 +489,14 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
             n_levels = n_stories
             file_tag = '_drift.out'
 
-            filename = posixpath.join(edp_folder, 'story1' + file_tag)
-            n_pts = len(pd.read_csv(filename, sep='\t', header=None))
-
             edp_results = np.zeros((n_levels, n_pts))
             for i in range(n_levels):
                 filename = posixpath.join(edp_folder, 'story' + str(i + 1) + file_tag)
                 time_history = pd.read_csv(filename, sep=' ', header=None)
-                #                 edp_results[i,:] = np.squeeze(time_history[:,-1])
-                edp_results[i, :] = np.squeeze(time_history.iloc[:])
+                try:
+                    edp_results[i,:] = np.squeeze(time_history.iloc[:,-1])
+                except:
+                    edp_results[i, :] = np.squeeze(time_history.iloc[:-1, -1])
             dset = edp_results_group.create_dataset(edp_name, data=edp_results)
 
             edp_name = 'peak_interstory_drift'
@@ -483,7 +505,7 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
             dset.attrs['max_peak_interstory_drift'] = np.max(peak_results)
 
             edp_name = 'residual_interstory_drift'
-            residual_results = edp_results[:, -1]
+            residual_results = np.median(edp_results[:, residual_start_idx:-1], axis=1)
             dset = edp_results_group.create_dataset(edp_name, data=residual_results)
             dset.attrs['max_residual_interstory_drift'] = np.max(np.abs(residual_results))
 
@@ -492,14 +514,14 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
             n_levels = n_stories
             file_tag = '_disp.out'
 
-            filename = posixpath.join(edp_folder, 'story1' + file_tag)
-            n_pts = len(pd.read_csv(filename, sep='\t', header=None))
-
             edp_results = np.zeros((n_levels, n_pts))
             for i in range(n_levels):
                 filename = posixpath.join(edp_folder, 'story' + str(i + 1) + file_tag)
                 time_history = pd.read_csv(filename, sep=' ', header=None)
-                edp_results[i, :] = np.squeeze(time_history.iloc[:, -1])
+                try:
+                    edp_results[i,:] = np.squeeze(time_history.iloc[:,-1])
+                except:
+                    edp_results[i, :] = np.squeeze(time_history.iloc[:-1, -1])
             dset = edp_results_group.create_dataset(edp_name, data=edp_results)
             dset.attrs['units'] = 'inches'
 
@@ -510,7 +532,7 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
             dset.attrs['units'] = 'inches'
 
             edp_name = 'residual_displacement'
-            residual_results = edp_results[:, -1]
+            residual_results = np.median(edp_results[:, residual_start_idx:-1], axis=1)
             dset = edp_results_group.create_dataset(edp_name, data=residual_results)
             dset.attrs['max_residual_displacement'] = np.max(np.abs(residual_results))
             dset.attrs['units'] = 'inches'
