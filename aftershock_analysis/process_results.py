@@ -100,11 +100,12 @@ def fragility_by_edp(results_filename, edp_results, edp_categories, edp_cutoffs,
         key = gm_scale_group + '/msa_sa_avg/collapse_matrix'
         stripes = pd.read_hdf(results_filename, key=key).columns
 
-        fragilities = pd.DataFrame(columns=['Median', 'Beta'], dtype='float64')
-        fragilities['Max_EDP'] = 0
+        fragilities = pd.DataFrame(columns=['Median', 'Beta', 'Min EDP', 'Max EDP', 'N Damaged Instances'],
+                                   dtype='float64')
         for i in range(n_categories):
             [gm_idx, scale_idx] = np.where((edp_results > edp_cutoffs[i]) & (edp_results <= edp_cutoffs[i + 1]))
             df.iloc[gm_idx, scale_idx] = edp_categories[i]
+            n_instances = len(gm_idx)
 
             total_collapse_matrix = pd.DataFrame(columns=stripes, dtype='float64')
             for i_gm, i_scale in zip(gm_idx, scale_idx):
@@ -116,20 +117,24 @@ def fragility_by_edp(results_filename, edp_results, edp_categories, edp_cutoffs,
                 collapse_matrix = pd.read_hdf(results_filename, key=key)
                 total_collapse_matrix = pd.concat([total_collapse_matrix, collapse_matrix], axis=0)
 
-            fragilities.loc[edp_categories[i], ['Median', 'Beta']] = compute_msa_fragility(total_collapse_matrix,
+            if n_instances > 0:
+                fragilities.loc[edp_categories[i], ['Median', 'Beta']] = compute_msa_fragility(total_collapse_matrix,
                                                                                            plot=False)
-            fragilities.loc[edp_categories[i], 'Max_EDP'] = edp_cutoffs[i + 1]
+            fragilities.loc[edp_categories[i], 'Min EDP'] = edp_cutoffs[i]
+            fragilities.loc[edp_categories[i], 'Max EDP'] = edp_cutoffs[i + 1]
+            fragilities.loc[edp_categories[i], 'N Damaged Instances'] = n_instances
 
     elif fragility_type == 'ida_sa_avg':
         gm_scale_group = 'mainshock_damage_results/' + gm_ids[0] + '/' + str(scales[0]) + 'Col'
         key = gm_scale_group + '/ida/collapse_intensities'
         columns = pd.read_hdf(results_filename, key=key).columns
 
-        fragilities = pd.DataFrame(columns=['Median', 'Beta'], dtype='float64')
-        fragilities['Max_EDP'] = 0
+        fragilities = pd.DataFrame(columns=['Median', 'Beta', 'Max EDP', 'Min EDP', 'N Damaged Instances'],
+                                   dtype='float64')
         for i in range(n_categories):
             [gm_idx, scale_idx] = np.where((edp_results > edp_cutoffs[i]) & (edp_results <= edp_cutoffs[i + 1]))
             df.iloc[gm_idx, scale_idx] = edp_categories[i]
+            n_instances = len(gm_idx)
 
             total_collapse_intensities = pd.DataFrame(columns=columns, dtype='float64')
             for i_gm, i_scale in zip(gm_idx, scale_idx):
@@ -142,8 +147,11 @@ def fragility_by_edp(results_filename, edp_results, edp_categories, edp_cutoffs,
                 total_collapse_intensities = pd.concat([total_collapse_intensities, collapse_intensities], axis=0)
 
             im = 'Sa_avg'
-            fragilities.loc[edp_categories[i], ['Median', 'Beta']] = compute_ida_fragility(
-                total_collapse_intensities[im], plot=True)
-            fragilities.loc[edp_categories[i], 'Max_EDP'] = edp_cutoffs[i + 1]
+            if n_instances > 0:
+                fragilities.loc[edp_categories[i], ['Median', 'Beta']] = compute_ida_fragility(
+                    total_collapse_intensities[im], plot=False)
+            fragilities.loc[edp_categories[i], 'Min EDP'] = edp_cutoffs[i]
+            fragilities.loc[edp_categories[i], 'Max EDP'] = edp_cutoffs[i + 1]
+            fragilities.loc[edp_categories[i], 'N Damaged Instances'] = n_instances
 
     return fragilities
