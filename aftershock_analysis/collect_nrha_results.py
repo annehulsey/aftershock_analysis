@@ -567,9 +567,19 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
             dset.attrs['max_peak_story_drift'] = np.max(peak_results)
 
             edp_name = 'residual_story_drift'
-            residual_results = np.median(edp_results[:, residual_start_idx:-1], axis=1)
+            residual_results = np.median(edp_results[:, residual_start_idx:], axis=1)
             dset = edp_results_group.create_dataset(edp_name, data=residual_results)
             dset.attrs['max_residual_story_drift'] = np.max(np.abs(residual_results))
+
+            edp_name = 'between_story_drift_time_history'
+            edp_results = np.append(np.zeros((1, n_pts)), edp_results, axis=0)
+            edp_results = edp_results[1:, :] - edp_results[:-1, :]
+            dset = edp_results_group.create_dataset(edp_name, data=edp_results)
+
+            edp_name = 'residual_between_story_drift'
+            residual_results = np.median(edp_results[:, residual_start_idx:], axis=1)
+            dset = edp_results_group.create_dataset(edp_name, data=residual_results)
+
 
         elif edp == 'displacement':
             edp_name = 'story_displacement_time_history'
@@ -594,7 +604,7 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
             dset.attrs['units'] = 'inches'
 
             edp_name = 'residual_displacement'
-            residual_results = np.median(edp_results[:, residual_start_idx:-1], axis=1)
+            residual_results = np.median(edp_results[:, residual_start_idx:], axis=1)
             dset = edp_results_group.create_dataset(edp_name, data=residual_results)
             dset.attrs['max_residual_displacement'] = np.max(np.abs(residual_results))
             dset.attrs['units'] = 'inches'
