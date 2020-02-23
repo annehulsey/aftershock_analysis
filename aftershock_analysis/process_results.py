@@ -37,7 +37,7 @@ def k_by_damage_instance(results_filename, edp_results, fragility_type, ax):  # 
 
     if ax is not None:
         _ = ax.scatter(edp, k, facecolor='none', edgecolor='tab:blue')
-        _ = ax.set_xlabel('Max Interstory Drift Ratio [%]')
+        _ = ax.set_xlabel('Max Story Drift Ratio [%]')
         ylabel = 'Reduction in Collapse Capacity,\n' + r'$\kappa=\frac{\widehat{Sa}_{col, damaged}}{\widehat{Sa}_{col, intact}}$'
         _ = ax.set_ylabel(ylabel)
         _ = ax.set_title('Comparison with Burton et al. 2018')
@@ -78,7 +78,7 @@ def k_by_damage_instance_and_gm(results_filename, edp_results, ax):
 
     if ax is not None:
         _ = ax.scatter(edp, k, facecolor='none', edgecolor='tab:blue')
-        _ = ax.set_xlabel('Max Interstory Drift Ratio [%]')
+        _ = ax.set_xlabel('Max Story Drift Ratio [%]')
         ylabel = 'Reduction in Collapse Capacity,\n' + r'$\kappa=\frac{Sa_{col, damaged}}{Sa_{col, intact}}$'
         _ = ax.set_ylabel(ylabel)
         _ = ax.set_title('Comparison with Raghunandan et al. 2015')

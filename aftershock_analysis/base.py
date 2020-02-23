@@ -6,6 +6,10 @@ import scipy.stats as stats
 import scipy.optimize as optimize
 import os
 import posixpath
+from functools import partial
+
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 from IPython.display import display
 
