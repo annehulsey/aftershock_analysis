@@ -1,7 +1,7 @@
 from .base import *
 
 
-def store_building_geometry(results_filename, hf_group, n_stories, n_bays, story_height, bay_width):
+def store_building_geometry(results_filename, hf_group, n_stories, n_bays, story_heights, bay_widths):
 
     with h5py.File(results_filename, 'r+') as hf:
         hf_group = hf[hf_group]
@@ -12,14 +12,14 @@ def store_building_geometry(results_filename, hf_group, n_stories, n_bays, story
         hf_group.attrs['n_bays'] = n_bays
         hf_group.attrs['n_columns'] = n_bays + 1
 
-        bay_width = bay_width * 12
-        story_height = story_height * 12
+        bay_widths = bay_widths * 12
+        story_heights = story_heights * 12
 
-        hf_group.attrs['bay_width'] = bay_width
-        hf_group.attrs['story_height'] = n_stories * story_height
+        hf_group.attrs['bay_widths'] = bay_widths
+        hf_group.attrs['story_heights'] = story_heights
 
-        hf_group.attrs['building_width'] = n_bays * bay_width
-        hf_group.attrs['building_height'] = n_stories * story_height
+        hf_group.attrs['building_width'] = np.sum(bay_widths)
+        hf_group.attrs['building_height'] = np.sum(story_heights)
 
         # store the original geometry of each column
         columns = np.zeros(((n_bays + 1) * n_stories, 2, 2))
@@ -27,10 +27,10 @@ def store_building_geometry(results_filename, hf_group, n_stories, n_bays, story
         for i_story in range(n_stories):
             for i_beam in range(n_bays + 1):
                 # x values of columns
-                columns[i_element, :, 0] = (i_beam) * bay_width
+                columns[i_element, :, 0] = np.sum(bay_widths[:i_beam])
                 for i_end in range(2):
                     # y values of columns
-                    columns[i_element, i_end, 1] = (i_story + i_end) * story_height
+                    columns[i_element, i_end, 1] = np.sum(story_heights[:i_story + i_end])
                 i_element = i_element + 1
         key = 'column_geometry'
         hf_group.create_dataset(key, data=columns)
@@ -41,10 +41,10 @@ def store_building_geometry(results_filename, hf_group, n_stories, n_bays, story
         for i_story in range(n_stories):
             for i_beam in range(n_bays):
                 # y values of beams
-                beams[i_element, :, 1] = (i_story + 1) * story_height
+                beams[i_element, :, 1] = np.sum(story_heights[:i_story+1])
                 for i_end in range(2):
                     # x values of beams
-                    beams[i_element, i_end, 0] = (i_beam + i_end) * bay_width
+                    beams[i_element, i_end, 0] = np.sum(bay_widths[:i_beam + i_end])
                 i_element = i_element + 1
         key = 'beam_geometry'
         hf_group.create_dataset(key, data=beams)
