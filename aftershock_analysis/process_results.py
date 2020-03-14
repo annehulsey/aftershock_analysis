@@ -19,6 +19,9 @@ def k_by_damage_instance(results_filename, edp_results, fragility_type, ax):  # 
     elif fragility_type == 'ida_sa_avg':
         fragility_key = '/ida/collapse_fragilities'
         fragility_idx = 1
+    elif fragility_type == 'ida_sa_t1':
+        fragility_key = '/ida/collapse_fragilities'
+        fragility_idx = 0
     key = 'intact_results' + fragility_key
     intact_median = pd.read_hdf(results_filename, key).to_numpy()[fragility_idx][0]
 
@@ -26,14 +29,16 @@ def k_by_damage_instance(results_filename, edp_results, fragility_type, ax):  # 
     for gm_id in gm_ids:
         for scale in scales:
             edp[i] = 100 * edp_results.loc[gm_id, scale]
+            edp[i] = edp_results.loc[gm_id, scale]
 
             key = 'mainshock_damage_results/' + gm_id + '/' + str(scale) + 'Col' + fragility_key
             median = pd.read_hdf(results_filename, key).to_numpy()[fragility_idx][0]
             k[i] = median / intact_median
+            damage_intance_name.append(gm_id[2:] + ': ' + str(scale)) # + 'Col')
 
             i = i + 1
 
-    edp_k = pd.DataFrame({'EDP': edp, 'kappa': k})
+    edp_k = pd.DataFrame({'Damage Instance':damage_intance_name, 'EDP': edp, 'kappa': k})
 
     if ax is not None:
         _ = ax.scatter(edp, k, facecolor='none', edgecolor='tab:blue')
@@ -64,9 +69,6 @@ def k_by_damage_instance_and_gm(results_filename, edp_results, ax):
             start_i = i * n_gms
             end_i = start_i + n_gms
             edp[start_i:end_i] = 100 * edp_results.loc[gm_id, scale]
-
-            if end_i == 7784:
-                print(edp.shape)
 
             key = 'mainshock_damage_results/' + gm_id + '/' + str(scale) + 'Col' + '/ida/collapse_intensities'
             collapse_intensities = pd.read_hdf(results_filename, key)['Scale Factor']

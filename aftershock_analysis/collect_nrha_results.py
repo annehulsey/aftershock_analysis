@@ -49,6 +49,16 @@ def store_building_geometry(results_filename, hf_group, n_stories, n_bays, story
         key = 'beam_geometry'
         hf_group.create_dataset(key, data=beams)
 
+        # store the joint locations
+        joints_x = np.array([np.sum(bay_widths[:i_beam]) for i_beam in range(n_bays + 1)])
+        joints_y = np.flip(np.array([np.sum(story_heights[:i_story+1]) for i_story in range(n_stories)]), axis=0)
+        [joints_x, joints_y] = np.meshgrid(joints_x, joints_y)
+        key = 'joint_locations/joints_x'
+        hf_group.create_dataset(key, data=joints_x)
+        key = 'joint_locations/joints_y'
+        hf_group.create_dataset(key, data=joints_y)
+
+
 
 def collect_gm_metadata(gm_files, results_filename, gm_group):
 
@@ -447,7 +457,7 @@ def collect_damaged_results(damaged_folder, gm_metadata, results_filename, damag
                         ida_results_group = gm_scale_group.create_group('ida').name
                     collect_ida_results(gm_scale_folder, gm_metadata, results_filename, ida_results_group)
                     collect_ida_polarity(gm_scale_folder, results_filename, ida_results_group)
-                    collect_ida_time_history(gm_scale_folder, gm_metadata, results_filename, ida_results_group)
+                    # collect_ida_time_history(gm_scale_folder, gm_metadata, results_filename, ida_results_group)
                 else:
                     raise ValueError('Add code for result_type.')
 

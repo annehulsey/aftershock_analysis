@@ -226,7 +226,7 @@ def plot_damaged_msa_vs_ida_per_gm(gm_id, results_filename, gm_metadata, msa_int
 
 
 def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fragility, intact_ida_segments,
-                            peak_segments, residual_segments):
+                            peak_segments, residual_segments, savefig):
     damaged_group = 'mainshock_damage_results'
     fragility_linewidth = 3
 
@@ -369,6 +369,9 @@ def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fra
             _ = current_ax.scatter(x, y, color=color, zorder=50, s=100)
 
             fig.tight_layout(rect=[0, 0, 1, 0.95])
+            if savefig:
+                figname = gm_id + '_Mainshocks.png'
+                plt.savefig(figname, dpi=300)
             plt.show()
 
 
@@ -477,7 +480,7 @@ def plot_mainshock_damage_visual(displacement, periods, spectrum, acc, dt, n_pts
 
     current_ax = ax[3]
     t = len(time_series) - 1
-    plot_scale = 5
+    plot_scale = 10
     plot_building_at_t(t, displacement, column_geometry, beam_geometry, plot_scale, current_ax)
 
     plt.tight_layout()
