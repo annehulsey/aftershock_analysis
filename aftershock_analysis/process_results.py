@@ -12,6 +12,7 @@ def k_by_damage_instance(results_filename, edp_results, fragility_type, ax):  # 
 
     edp = np.zeros((n_gms * n_scales))
     k = np.zeros_like(edp)
+    damage_intance_name = list()
 
     if fragility_type == 'msa_sa_avg':
         fragility_key = '/msa_sa_avg/collapse_fragilities'
