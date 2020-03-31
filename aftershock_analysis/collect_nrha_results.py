@@ -2,6 +2,15 @@ from .base import *
 
 
 def store_building_geometry(results_filename, hf_group, n_stories, n_bays, story_heights, bay_widths):
+    ## Creates arrays with the geometry meta data of the frame in the group with name hf_group inside the h5
+    # file results_filename
+    # INPUTS
+    #       results_filename: name of h5 file to store frame information
+    #       hf_group: name of the group to store builidng metadata
+    #       n_stories: number of stories in frame
+    #       n_bays: number of bays in frame
+    #       story_heights: np.array with the story heights
+    #       bay_widths: np.array with the bay lengths
 
     with h5py.File(results_filename, 'r+') as hf:
         hf_group = hf[hf_group]
@@ -51,7 +60,9 @@ def store_building_geometry(results_filename, hf_group, n_stories, n_bays, story
 
         # store the joint locations
         joints_x = np.array([np.sum(bay_widths[:i_beam]) for i_beam in range(n_bays + 1)])
-        joints_y = np.flip(np.array([np.sum(story_heights[:i_story+1]) for i_story in range(n_stories)]), axis=0)
+        # joints_y = np.flip(np.array([np.sum(story_heights[:i_story+1]) for i_story in range(n_stories)]), axis=0)
+        joints_y = np.array([np.sum(story_heights[:i_story + 1]) for i_story in range(n_stories)])
+        joints_y = np.insert(joints_y, 0, 0, axis=0)  # add the hinge at column base
         [joints_x, joints_y] = np.meshgrid(joints_x, joints_y)
         key = 'joint_locations/joints_x'
         hf_group.create_dataset(key, data=joints_x)
@@ -59,6 +70,110 @@ def store_building_geometry(results_filename, hf_group, n_stories, n_bays, story
         hf_group.create_dataset(key, data=joints_y)
 
 
+def store_hinge_rotations(results_filename, building_group, model_path):
+    ## Creates arrays with the rotation key points of the hinge backbone curves. Stores it in
+    # the group with name hf_group inside the h5 file results_filename
+    # INPUTS
+    #       results_filename: name of h5 file to store frame information
+    #       building_group: name of the group to store building metadata
+    #       model_path: path to locate the OpenSees tcl file with the material definitions
+
+    with h5py.File(results_filename, 'r+') as hf:
+        # Read frame geometry basics
+        building_group = hf[building_group]
+        n_stories = building_group.attrs['n_stories']
+        n_bays = building_group.attrs['n_bays']
+
+        # Open the model file and save in a list of string
+        with open(model_path) as model_file:
+            model_str = model_file.readlines()
+        model_file.close()
+
+        # Create arrays to store the joint rotation capacities
+        rotation_yield_positive = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+        rotation_cap_positive = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+        rotation_ultimate_positive = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+
+        rotation_yield_negative = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+        rotation_cap_negative = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+        rotation_ultimate_negative = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+
+        # Look for all 4 hinges around each joint
+        for floorIdx in range(1, (n_stories + 2)):
+            for colIdx in range(1, (n_bays + 2)):
+                j = 0
+                for eleSide in [1, 2]:
+                    # print(eleSide)
+                    # eleSide =   # For beams: 1 left hinge in right/current bay and 2 for right hinge in left bay
+                    # For columns: 1 is bottom hinge and 2 is top hinge
+                    for eleTypeIdx in [2, 3]:
+                        #       print(eleTypeIdx)
+                        # eleTypeIdx =  # 2 for beams and 3 for columns
+
+                        # Create hinge element tag
+                        bayIdx = colIdx + 1 - eleSide
+                        storyIdx = floorIdx - 2 + eleSide
+                        if floorIdx == 1 and j == 2:
+                            # Base column
+                            hingeLabel = 300000 + floorIdx * 1000 + colIdx * 10 + 1
+                        elif bayIdx > 0 and bayIdx <= n_bays and eleTypeIdx == 3 and floorIdx > 1:
+                            # Beam hinges
+                            hingeLabel = 200000 + floorIdx * 1000 + bayIdx * 10 + eleSide
+                        elif storyIdx <= n_stories and eleTypeIdx == 2 and floorIdx > 1:
+                            # Column hinges
+                            hingeLabel = 300000 + storyIdx * 1000 + colIdx * 10 + 1
+                        else:
+                            hingeLabel = 0
+
+                        #                 print(hingeLabel)
+
+                        if hingeLabel != 0:
+                            # Find line with the hinge we are looking for
+                            key = 'CreateIbarraMaterial     ' + str(hingeLabel)
+
+                            res = [i for i in model_str if key in i]
+                            matLine = str(res)
+
+                            # Extract hinge rotation capacity
+                            matAssignments = matLine.split()
+
+                            EIeff = float(matAssignments[3])
+                            myPos = float(matAssignments[4])
+                            myNeg = float(matAssignments[5])
+                            thetaCapPos = float(matAssignments[7])
+                            thetaCapNeg = float(matAssignments[8])
+                            stiffFactor1 = 11
+                            eleLength = float(matAssignments[15])
+                            thetaPC = float(matAssignments[9])
+
+                            thetaCap = (thetaCapPos - thetaCapNeg) / 2
+
+                            elstk = stiffFactor1 * ((6 * EIeff) / eleLength)
+
+                            rotation_yield_positive[floorIdx-1, colIdx-1, j, 0] = myPos / elstk
+                            rotation_cap_positive[floorIdx-1, colIdx-1, j, 0] = myPos / elstk + thetaCap
+                            rotation_ultimate_positive[floorIdx-1, colIdx-1, j, 0] = myPos / elstk + thetaCap + thetaPC
+
+                            rotation_yield_negative[floorIdx-1, colIdx-1, j, 0] = myNeg / elstk
+                            rotation_cap_negative[floorIdx-1, colIdx-1, j, 0] = myNeg / elstk - thetaCap
+                            rotation_ultimate_negative[floorIdx-1, colIdx-1, j, 0] = myNeg / elstk - thetaCap - thetaPC
+
+                        j = j + 1
+
+        # Save in h5 file's building_group
+        key = 'hinge_yield_rotation_positive'
+        building_group.create_dataset(key, data=rotation_yield_positive)
+        key = 'hinge_cap_rotation_positive'
+        building_group.create_dataset(key, data=rotation_cap_positive)
+        key = 'hinge_ultimate_rotation_positive'
+        building_group.create_dataset(key, data=rotation_ultimate_positive)
+
+        key = 'hinge_yield_rotation_negative'
+        building_group.create_dataset(key, data=rotation_yield_negative)
+        key = 'hinge_cap_rotation_negative'
+        building_group.create_dataset(key, data=rotation_cap_negative)
+        key = 'hinge_ultimate_rotation_negative'
+        building_group.create_dataset(key, data=rotation_ultimate_negative)
 
 def collect_gm_metadata(gm_files, results_filename, gm_group):
 
@@ -192,7 +307,7 @@ def collect_ida_results(ida_folder, gm_metadata, results_filename, ida_results_g
 
 
 def collect_ida_polarity(gm_scale_folder, results_filename, ida_results_group):
-    folder_path = gm_scale_folder.split('AnalysisResult/IDA')
+    folder_path = gm_scale_folder.split('AnalysisResult_200314/IDA')
     polarity_folder = folder_path[0] + 'GroundMotion' + folder_path[1]
     polarity_file = posixpath.join(polarity_folder, 'GMafterInfo.txt')
 
@@ -524,8 +639,8 @@ def create_damaged_gm_scale_group(results_filename, damaged_group, gm_id, scale,
 
 
 def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_group):
-    edp_list = ['drift', 'displacement', 'acceleration']
-    edp_list = ['drift', 'displacement']
+    #edp_list = ['drift', 'displacement', 'acceleration']
+    edp_list = ['drift', 'displacement', 'jointRotations']
 
     file_tag = '_disp.out'
     filename = posixpath.join(edp_folder, 'story1' + file_tag)
@@ -540,7 +655,8 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
     edp_results_group.create_dataset('time_series', data=time_series)
 
     building_group = hf[building_group]
-    n_stories = building_group.attrs['n_stories']
+    n_stories = building_group.attrs['n_stories']	
+    n_bays = building_group.attrs['n_bays']
 
     for edp in edp_list:
 
@@ -618,6 +734,92 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
             dset = edp_results_group.create_dataset(edp_name, data=residual_results)
             dset.attrs['max_residual_displacement'] = np.max(np.abs(residual_results))
             dset.attrs['units'] = 'inches'
+
+        elif edp == 'jointRotations':
+            # Read and save every joint rotation demand
+            # Find length of time series data and initialize results array
+            filename = posixpath.join(edp_folder, 'jointRotations40201.out')
+            time_series = np.squeeze(pd.read_csv(filename, sep=' ', header=None).iloc[:, 0].values)
+            time_series = time_series[~np.isnan(time_series)]
+            n_pts = len(time_series)
+
+            hingeRotDemandsTH = np.zeros([n_stories+1,n_bays+1,4,n_pts])
+            hingeRotDemandsPeakPos = np.zeros([n_stories+1,n_bays+1,4,1])
+            hingeRotDemandsPeakNeg = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+            hingeRotDemandsResidual = np.zeros([n_stories+1,n_bays+1,4,1])
+
+            # Read rotation of hinges at each joint and store in results array
+            for floorIdx in range(1, (n_stories + 2)):
+                for colIdx in range(1, (n_bays + 2)):
+
+                    if floorIdx >= 2:
+                        ## For the air floors
+                        # build joint filename to read
+                        jointLabel = 40000 + floorIdx*100 + colIdx
+                        jointFile = 'jointRotations' + str(jointLabel) + '.out'
+
+                        # read joint file
+                        file_path = posixpath.join(edp_folder, jointFile)
+                        results = pd.read_csv(file_path, sep=' ', header=None,
+                                              names=['bottom', 'right', 'top', 'left', 'center'])
+
+                        # Save as np array in 4 dimensions (floorIdx, colIdx, hingeLocation, time)
+                        hingeRotDemandsTH[floorIdx-1,colIdx-1,0,:] = results.bottom
+                        hingeRotDemandsTH[floorIdx-1,colIdx-1,1,:] = results.right
+                        hingeRotDemandsTH[floorIdx-1,colIdx-1,2,:] = results.top
+                        hingeRotDemandsTH[floorIdx-1,colIdx-1,3,:] = results.left
+
+                        hingeRotDemandsPeakPos[floorIdx-1,colIdx-1,0,0] = max(results.bottom)
+                        hingeRotDemandsPeakPos[floorIdx-1,colIdx-1,1,0] = max(results.right)
+                        hingeRotDemandsPeakPos[floorIdx-1,colIdx-1,2,0] = max(results.top)
+                        hingeRotDemandsPeakPos[floorIdx-1,colIdx-1,3,0] = max(results.left)
+
+                        hingeRotDemandsPeakNeg[floorIdx-1,colIdx-1,0,0] = min(results.bottom)
+                        hingeRotDemandsPeakNeg[floorIdx-1,colIdx-1,1,0] = min(results.right)
+                        hingeRotDemandsPeakNeg[floorIdx-1,colIdx-1,2,0] = min(results.top)
+                        hingeRotDemandsPeakNeg[floorIdx-1,colIdx-1,3,0] = min(results.left)
+
+                        hingeRotDemandsResidual[floorIdx-1,colIdx-1,0,0] = np.median(results.bottom[residual_start_idx:])
+                        hingeRotDemandsResidual[floorIdx-1,colIdx-1,1,0] = np.median(results.right[residual_start_idx:])
+                        hingeRotDemandsResidual[floorIdx-1,colIdx-1,2,0] = np.median(results.top[residual_start_idx:])
+                        hingeRotDemandsResidual[floorIdx-1,colIdx-1,3,0] = np.median(results.left[residual_start_idx:])
+
+                    else:
+                        ## For the base of the columns
+                        # build column base filename to read
+                        elementLabel = 6000 + colIdx*10 + 2
+                        elementFile = 'columnBase' + str(elementLabel) + '.out'
+
+                        # read joint file
+                        file_path = posixpath.join(edp_folder, elementFile)
+                        results = pd.read_csv(file_path, sep=' ', header=None, names=['top'])
+
+                        # Save as np array in 4 dimensions (floorIdx, colIdx, hingeLocation, time)
+                        hingeRotDemandsTH[floorIdx-1,colIdx-1,2,:] = results.top
+                        hingeRotDemandsPeakPos[floorIdx-1,colIdx-1,2,0] = max(results.top)
+                        hingeRotDemandsPeakNeg[floorIdx - 1, colIdx - 1, 2, 0] = min(results.top)
+                        hingeRotDemandsResidual[floorIdx-1,colIdx-1,2,0] = np.median(results.top[residual_start_idx:])
+
+            # Defines pointer for storing the joint demands
+            edp_name = 'joint_rotations_time_history'
+            dset = edp_results_group.create_dataset(edp_name, data=hingeRotDemandsTH)
+            dset.attrs['units'] = 'rad'
+            dset.attrs['Hinge locations'] = '0: Bottom; 1: Right; 2: Top; 3: Left'
+
+            edp_name = 'peak_joint_rotations_pos'
+            dset = edp_results_group.create_dataset(edp_name, data=hingeRotDemandsPeakPos)
+            dset.attrs['units'] = 'rad'
+            dset.attrs['Hinge locations'] = '0: Bottom; 1: Right; 2: Top; 3: Left'
+
+            edp_name = 'peak_joint_rotations_neg'
+            dset = edp_results_group.create_dataset(edp_name, data=hingeRotDemandsPeakNeg)
+            dset.attrs['units'] = 'rad'
+            dset.attrs['Hinge locations'] = '0: Bottom; 1: Right; 2: Top; 3: Left'
+
+            edp_name = 'residual_joint_rotations'
+            dset = edp_results_group.create_dataset(edp_name, data=hingeRotDemandsResidual)
+            dset.attrs['units'] = 'rad'
+            dset.attrs['Hinge locations'] = '0: Bottom; 1: Right; 2: Top; 3: Left'
 
         else:
             raise ValueError('define edp results collection method')
