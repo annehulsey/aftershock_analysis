@@ -29,7 +29,6 @@ def k_by_damage_instance(results_filename, edp_results, fragility_type, ax):  # 
     i = 0
     for gm_id in gm_ids:
         for scale in scales:
-            edp[i] = 100 * edp_results.loc[gm_id, scale]
             edp[i] = edp_results.loc[gm_id, scale]
 
             key = 'mainshock_damage_results/' + gm_id + '/' + str(scale) + 'Col' + fragility_key
@@ -69,7 +68,7 @@ def k_by_damage_instance_and_gm(results_filename, edp_results, ax):
         for scale in scales:
             start_i = i * n_gms
             end_i = start_i + n_gms
-            edp[start_i:end_i] = 100 * edp_results.loc[gm_id, scale]
+            edp[start_i:end_i] = edp_results.loc[gm_id, scale]
 
             key = 'mainshock_damage_results/' + gm_id + '/' + str(scale) + 'Col' + '/ida/collapse_intensities'
             collapse_intensities = pd.read_hdf(results_filename, key)['Scale Factor']

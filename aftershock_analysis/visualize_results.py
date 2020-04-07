@@ -662,9 +662,9 @@ def plot_multi_bin_fragilities(intact_fragility, fragilities, edp_k_raghunandan,
 
     color = 'lightgray'
     alpha = 1
-    _ = ax[0].scatter(edp_k_raghunandan['EDP'], edp_k_raghunandan['kappa'], facecolor='none', edgecolor=color,
+    _ = ax[0].scatter(100*edp_k_raghunandan['EDP'], edp_k_raghunandan['kappa'], facecolor='none', edgecolor=color,
                       alpha=alpha, zorder=-10)
-    _ = ax[1].scatter(edp_k_burton['EDP'], edp_k_burton['kappa'], facecolor='none', edgecolor=color, alpha=alpha,
+    _ = ax[1].scatter(100*edp_k_burton['EDP'], edp_k_burton['kappa'], facecolor='none', edgecolor=color, alpha=alpha,
                       zorder=-10)
 
     for i in range(2):
