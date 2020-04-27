@@ -307,7 +307,7 @@ def collect_ida_results(ida_folder, gm_metadata, results_filename, ida_results_g
 
 
 def collect_ida_polarity(gm_scale_folder, results_filename, ida_results_group):
-    folder_path = gm_scale_folder.split('AnalysisResult_200314/IDA')
+    folder_path = gm_scale_folder.split('AnalysisResult/IDA')
     polarity_folder = folder_path[0] + 'GroundMotion' + folder_path[1]
     polarity_file = posixpath.join(polarity_folder, 'GMafterInfo.txt')
 
