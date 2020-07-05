@@ -6,8 +6,8 @@ def collect_ida_curves(results_filename, gm_metadata, ida_folder):
     gm_ids = gm_metadata.index
     n_gms = len(gm_ids)
 
-    ida_segments = np.zeros((n_gms, 100, 2))
-    ida_segments[:, :, 0] = 0.1
+    ida_segments = np.zeros((n_gms, 300, 2))
+    ida_segments[:, :, 0] = 0.2
 
     for i, gm_id in zip(range(n_gms), gm_ids):
         key = ida_folder + gm_id + '/ida_curve'
@@ -22,6 +22,25 @@ def collect_ida_curves(results_filename, gm_metadata, ida_folder):
 
     return ida_segments
 
+def collect_ida_curves_modelUQ(results_filename, gm_metadata, ida_folder, model_id):
+    gm_ids = gm_metadata.index
+    n_gms = len(gm_ids)
+
+    ida_segments = np.zeros((n_gms, 300, 2))
+    ida_segments[:, :, 0] = 0.1
+
+    for i, gm_id in zip(range(n_gms), gm_ids):
+        key = ida_folder + gm_id + '/ida_curve/model_' + model_id
+        ida_curve = pd.read_hdf(results_filename, key)
+
+        ida_curve = ida_curve.loc[:, ['Sa_avg', 'Story Drift Ratio (max)']].to_numpy()
+        collapse = ida_curve[-1, 0]
+        ida_segments[i, :, 1] = collapse
+
+        ida_segments[i, 0:len(ida_curve), 1] = ida_curve[:, 0]
+        ida_segments[i, 0:len(ida_curve), 0] = ida_curve[:, 1]
+
+    return ida_segments
 
 def collect_peak_and_residual_drift_curves(results_filename, gm_metadata):
     gm_ids = gm_metadata.index
@@ -230,11 +249,27 @@ def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fra
     damaged_group = 'mainshock_damage_results'
     fragility_linewidth = 3
 
-    with h5py.File(results_filename, 'r') as hf:
-        i = int(gm_id[2:]) - 1
+    DriftLimit = 0.2
 
+    with h5py.File(results_filename, 'r') as hf:
         ida_fragilities = ida_intact_fragility.copy()
-        stripes = list(hf[damaged_group][gm_id].keys())
+
+        # To plot all mainshock intensities
+        # stripes = list(hf[damaged_group][gm_id].keys())
+
+        # To plot selected mainshock intensities
+        stripes_total = list(hf[damaged_group][gm_id].keys())
+        stripes = ['0.2Col', '0.4Col', '0.7Col', '0.8Col']
+        index = [True] # intact
+        for i, a_i in enumerate(stripes_total):
+            if stripes.count(a_i) > 0:
+                index.append(True)
+            else:
+                index.append(False)
+        peak_segments = peak_segments[:, index, :]
+        residual_segments = residual_segments[:, index, :]
+
+        i = int(gm_id[2:]) - 1
 
         if len(stripes) > 1:
             fig, ax = plt.subplots(2, 2, figsize=(15, 10), gridspec_kw={'width_ratios': [0.55, 0.45]})
@@ -248,7 +283,7 @@ def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fra
             ida_ylim = [0, 1.1 * np.amax(intact_ida_segments[:, :, 1])]
             full_ida_plot = LineCollection(intact_ida_segments, linewidths=1, colors='lightgray', linestyle='solid')
             _ = current_ax.add_collection(full_ida_plot)
-            _ = current_ax.set_xlim(0, 0.1)
+            _ = current_ax.set_xlim(0, DriftLimit)
             _ = current_ax.set_ylim(ida_ylim)
             _ = current_ax.set_ylabel('Sa$_{avg}$(T$_1$), [g]')
             _ = current_ax.set_xlabel('Peak Story Drift Ratio')
@@ -343,7 +378,7 @@ def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fra
             _ = current_ax.grid('on')
 
             current_ax = ax[1][0]
-            _ = current_ax.set_xlim(0, 0.1)
+            _ = current_ax.set_xlim(0, DriftLimit)
             _ = current_ax.set_ylim(ida_ylim)
             _ = current_ax.set_ylabel('Sa$_{avg}$(T$_1$), [g]')
             _ = current_ax.set_xlabel('Peak Story Drift Ratio')
@@ -374,6 +409,170 @@ def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fra
                 plt.savefig(figname, dpi=300)
             plt.show()
 
+def plot_damaged_ida_per_gm_modelUQ(gm_id, results_filename, gm_metadata, ida_intact_fragility, intact_ida_segments,
+                            peak_segments, residual_segments, model_id, savefig):
+    damaged_group = 'mainshock_damage_results'
+    fragility_linewidth = 3
+
+    with h5py.File(results_filename, 'r') as hf:
+        ida_fragilities = ida_intact_fragility.copy()
+
+        # To plot all mainshock intensities
+        # stripes = list(hf[damaged_group][gm_id].keys())
+
+        # To plot selected mainshock intensities
+        stripes_total = list(hf[damaged_group][gm_id].keys())
+        stripes = ['0.2Col', '0.9Col']
+        index = [True]  # intact
+        for i, a_i in enumerate(stripes_total):
+            if stripes.count(a_i) > 0:
+                index.append(True)
+            else:
+                index.append(False)
+        peak_segments = peak_segments[:, index, :]
+        residual_segments = residual_segments[:, index, :]
+
+        i = int(gm_id[2:]) - 1
+
+        if len(stripes) > 1:
+            fig, ax = plt.subplots(2, 2, figsize=(15, 10), gridspec_kw={'width_ratios': [0.55, 0.45]})
+            suptitle = fig.suptitle('Mainshock: ' + gm_id)
+            ax[0][0].get_shared_x_axes().join(ax[0][0], ax[1][0])
+            ax[0][0].get_shared_y_axes().join(ax[0][0], ax[1][0])
+            ax[0][0].get_shared_y_axes().join(ax[0][0], ax[0][1])
+
+            # intact ida
+            current_ax = ax[0][0]
+            ida_ylim = [0, 1.1 * np.amax(intact_ida_segments[:, :, 1])]
+            full_ida_plot = LineCollection(intact_ida_segments, linewidths=1, colors='lightgray', linestyle='solid')
+            _ = current_ax.add_collection(full_ida_plot)
+            _ = current_ax.set_xlim(0, 0.1)
+            _ = current_ax.set_ylim(ida_ylim)
+            _ = current_ax.set_ylabel('Sa$_{avg}$(T$_1$), [g]')
+            _ = current_ax.set_xlabel('Peak Story Drift Ratio')
+
+            _ = current_ax.plot(intact_ida_segments[i, :, 0], intact_ida_segments[i, :, 1], color='k', linewidth=2.5,
+                                label=gm_id)
+            _ = current_ax.legend(loc='upper left')
+
+            if True:
+                current_ax = ax[1][0]
+                full_ida_plot = LineCollection(intact_ida_segments, linewidths=1, colors='lightgray', linestyle='solid')
+                _ = current_ax.add_collection(full_ida_plot)
+
+            # mainshock responses
+            current_ax = ax[0][1]
+            residual_plot = LineCollection(residual_segments, linewidths=1, colors='dimgray', linestyle='solid')
+            _ = current_ax.add_collection(residual_plot)
+            peak_plot = LineCollection(peak_segments, linewidths=1, colors='lightgray', linestyle='solid')
+            _ = current_ax.add_collection(peak_plot)
+            _ = current_ax.plot(residual_segments[i, :, 0], residual_segments[i, :, 1], color='k', linewidth=2.5)
+            _ = current_ax.plot(peak_segments[i, :, 0], peak_segments[i, :, 1], color='k', linewidth=2.5)
+            legend_elements = [Line2D([0], [0], color='lightgray', label='Peak Drift'),
+                               Line2D([0], [0], color='dimgray', label='Residual Drift')]
+            _ = current_ax.legend(handles=legend_elements, loc='upper left')
+            _ = current_ax.set_xlim(0, 0.06)
+            s = 0
+
+            # intact ida fragilities
+            current_ax = ax[1][1]
+            median = ida_fragilities.loc['Intact', 'Median']
+            beta = ida_fragilities.loc['Intact', 'Beta']
+
+            y = np.linspace(0.001, 1, num=100)
+            x = stats.lognorm(beta, scale=median).ppf(y)
+            label = 'No Mainshock' + '\n$IM_{0.5}=$' + '{0:.2f}'.format(median) + ' $\sigma_{ln}=$' + '{0:.2f}'.format(
+                beta)
+            _ = current_ax.plot(x, 100 * y, label=label, color='C' + str(s), linewidth=2.5)
+
+            key = '/intact_results/ida/collapse_intensities/model_' + model_id
+            collapse_intensities = pd.read_hdf(results_filename, key)['Sa_avg'].to_numpy()
+            n_gms = len(collapse_intensities)
+            _ = current_ax.scatter(np.sort(collapse_intensities),
+                                   np.linspace(100 / n_gms, 100, num=n_gms, endpoint=True),
+                                   color='C' + str(s), s=20, edgecolors='k', linewidth=0.5)
+
+            for stripe, s in zip(stripes, range(1, len(stripes) + 1)):
+
+                # mainshock stripe ida fragilities
+                current_ax = ax[1][1]
+                key = damaged_group + '/' + gm_id + '/' + stripe + '/ida/collapse_fragilities'
+                ida_fragilities.loc[stripe, :] = pd.read_hdf(results_filename, key).to_numpy()[1,
+                                                 :]  # 1 is for Sa_avg, 0 for Sa(T1)
+
+                median = ida_fragilities.loc[stripe, 'Median']
+                beta = ida_fragilities.loc[stripe, 'Beta']
+
+                y = np.linspace(0.001, 1, num=100)
+                x = stats.lognorm(beta, scale=median).ppf(y)
+                label = 'Mainshock: ' + stripe + '\n$IM_{0.5}=$' + '{0:.2f}'.format(
+                    median) + ', $\sigma_{ln}=$' + '{0:.2f}'.format(beta)
+                _ = current_ax.plot(x, 100 * y, label=label, color='C' + str(s), linewidth=fragility_linewidth)
+
+                key = damaged_group + '/' + gm_id + '/' + stripe + '/ida/collapse_intensities'
+                collapse_intensities = pd.read_hdf(results_filename, key)['Sa_avg'].to_numpy()
+                n_gms = len(collapse_intensities)
+                _ = current_ax.scatter(np.sort(collapse_intensities),
+                                       np.linspace(100 / n_gms, 100, num=n_gms, endpoint=True),
+                                       color='C' + str(s), s=20, edgecolors='k', linewidth=0.5)
+
+                # post-mainshock idas
+                damaged_ida_folder = '/mainshock_damage_results/' + gm_id + '/' + stripe + '/ida/'
+                damaged_ida_segments = collect_ida_curves(results_filename, gm_metadata, damaged_ida_folder)
+                # adjust to include residual drift
+                damaged_edp_folder = '/mainshock_damage_results/' + gm_id + '/' + stripe + '/mainshock_edp/'
+                dset = damaged_edp_folder + 'residual_story_drift'
+                residual_drift = hf[dset].attrs['max_residual_story_drift']
+                damaged_ida_segments[:, 0, 0] = residual_drift
+
+                if True:
+                    current_ax = ax[1][0]
+                    ida_plot = LineCollection(damaged_ida_segments, linewidths=1, colors='C' + str(s),
+                                              linestyle='solid', label=stripe)
+                    _ = current_ax.add_collection(ida_plot)
+                    _ = current_ax.legend(loc='upper left', handlelength=0.5)
+
+            current_ax = ax[1][1]
+            legend_title = 'Fragilities via IDA'
+            _ = current_ax.legend(title=legend_title, bbox_to_anchor=(1, 0.5), loc='center left')
+            _ = current_ax.set_ylabel('Probability of Collapse')
+            _ = current_ax.set_ylim(0, 100)
+            _ = current_ax.set_xlabel('Sa$_{avg}$(T$_1$), [g]')
+            _ = current_ax.grid('on')
+
+            current_ax = ax[1][0]
+            _ = current_ax.set_xlim(0, 0.1)
+            _ = current_ax.set_ylim(ida_ylim)
+            _ = current_ax.set_ylabel('Sa$_{avg}$(T$_1$), [g]')
+            _ = current_ax.set_xlabel('Peak Story Drift Ratio')
+
+            current_ax = ax[0][1]
+            _ = current_ax.set_ylabel('Sa$_{avg}$(T$_1$), [g]')
+            _ = current_ax.set_xlabel('Story Drift Ratio')
+            _ = current_ax.set_xlim(0, 0.1)
+            _ = current_ax.set_ylim(ida_ylim)
+
+            # add reference points to ida
+            current_ax = ax[0][0]
+            sa_avg_col = gm_metadata.loc[gm_id, 'Intact Collapse Sa_avg']
+            stripe_values = sa_avg_col * np.insert(np.array([float(x[:-3]) for x in stripes]), 0, 0)
+            x = np.interp(stripe_values, intact_ida_segments[i, :, 1], intact_ida_segments[i, :, 0])
+            color = ['C' + str(k) for k in range(len(stripe_values))]
+            _ = current_ax.scatter(x, stripe_values, color=color, zorder=50, s=100)
+
+            # add reference points to mainshocks
+            current_ax = ax[0][1]
+            y = peak_segments[i, :, 1]
+            x = peak_segments[i, :, 0]
+            _ = current_ax.scatter(x, y, color=color, zorder=50, s=100)
+            x = residual_segments[i, :, 0]
+            _ = current_ax.scatter(x, y, color=color, zorder=50, s=100)
+
+            fig.tight_layout(rect=[0, 0, 1, 0.95])
+            if savefig:
+                figname = gm_id + '_Mainshocks.png'
+                plt.savefig(figname, dpi=300)
+            plt.show()
 
 def plot_building_at_t(t, edp, columns, beams, plot_scale, ax):
     ax.cla()
@@ -402,16 +601,16 @@ def plot_building_at_t(t, edp, columns, beams, plot_scale, ax):
             i_story + 1, t]
         i_beam = i_beam + n_bays
 
-    column_collection = LineCollection(columns, color='darkgray')
+    column_collection = LineCollection(columns, color='darkgray', linestyle='--')
     _ = ax.add_collection(column_collection)
 
-    beam_collection = LineCollection(beams, color='darkgray')
+    beam_collection = LineCollection(beams, color='darkgray', linestyle='--')
     _ = ax.add_collection(beam_collection)
 
-    column_collection = LineCollection(columns_t, color='k')
+    column_collection = LineCollection(columns_t, color='k', linestyle='--')
     _ = ax.add_collection(column_collection)
 
-    beam_collection = LineCollection(beams_t, color='k')
+    beam_collection = LineCollection(beams_t, color='k', linestyle='--')
     _ = ax.add_collection(beam_collection)
 
     _ = ax.axis('scaled')
@@ -425,6 +624,7 @@ def plot_building_at_t(t, edp, columns, beams, plot_scale, ax):
     _ = ax.axis('off')
     # _ = ax.text(building_width / 2, -y_gap, 'Displacement scale: ' + str(plot_scale) + 'x', ha='center', va='top',
     #             fontsize=18)
+
 
 def plot_hinges(t, edp, joints_x, joints_y, plot_scale, peak_joint_pos, peak_joint_neg, hinge_yield_rotation_positive,
                 hinge_cap_rotation_positive, hinge_yield_rotation_negative, hinge_cap_rotation_negative,  ax):
@@ -459,8 +659,12 @@ def plot_hinges(t, edp, joints_x, joints_y, plot_scale, peak_joint_pos, peak_joi
     disp_t = np.insert(disp_t, 0, 0, axis=0)  # add the hinge at column base# add zero displacement at base of the column
     dhinge = 4  # plotting delta from joint
 
-    joints_x_yield = np.empty((0, 1))
-    joints_y_yield = np.empty((0, 1))
+    joints_x_yield_pos = np.empty((0, 1))
+    joints_y_yield_pos = np.empty((0, 1))
+    joints_x_yield_neg = np.empty((0, 1))
+    joints_y_yield_neg = np.empty((0, 1))
+    joints_x_yield_both = np.empty((0, 1))
+    joints_y_yield_both = np.empty((0, 1))
 
     joints_x_capt = np.empty((0, 1))
     joints_y_capt = np.empty((0, 1))
@@ -503,10 +707,20 @@ def plot_hinges(t, edp, joints_x, joints_y, plot_scale, peak_joint_pos, peak_joi
                     curr_y = joints_y[floor_i, col_i]
 
                 if yieldPos != 0:
-                    if (peakPos > yieldPos and peakPos <= capPos / 3) or (peakNeg > yieldNeg and peakNeg <= capNeg / 3):
+                    if (peakPos > yieldPos and peakPos <= capPos / 3):
                         # Between yield and capping/3
-                        joints_x_yield = np.append(joints_x_yield, curr_x)
-                        joints_y_yield = np.append(joints_y_yield, curr_y)
+                        joints_x_yield_pos = np.append(joints_x_yield_pos, curr_x)
+                        joints_y_yield_pos = np.append(joints_y_yield_pos, curr_y)
+
+                    if (peakNeg > yieldNeg and peakNeg <= capNeg / 3):
+                        # Between yield and capping/3
+                        joints_x_yield_neg = np.append(joints_x_yield_neg, curr_x)
+                        joints_y_yield_neg = np.append(joints_y_yield_neg, curr_y)
+
+                    if (peakPos > yieldPos and peakPos <= capPos / 3) and (peakNeg > yieldNeg and peakNeg <= capNeg / 3):
+                        # Between yield and capping/3
+                        joints_x_yield_both = np.append(joints_x_yield_both, curr_x)
+                        joints_y_yield_both = np.append(joints_y_yield_both, curr_y)
 
                     elif (peakPos > capPos / 3 and peakPos <= capPos * 2 / 3) or (
                             peakNeg > capNeg / 3 and peakNeg <= capNeg * 2 / 3):
@@ -529,7 +743,9 @@ def plot_hinges(t, edp, joints_x, joints_y, plot_scale, peak_joint_pos, peak_joi
                         joints_y_cap = np.append(joints_y_cap, curr_y)
 
     # Plot hinges with appropiate colors
-    _ = ax.plot(joints_x_yield, joints_y_yield, 'o', color='m')
+    _ = ax.plot(joints_x_yield_pos, joints_y_yield_pos, 'o', color='pink')
+    _ = ax.plot(joints_x_yield_neg, joints_y_yield_neg, 'o', color='hotpink')
+    _ = ax.plot(joints_x_yield_both, joints_y_yield_both, 'o', color='m')
     _ = ax.plot(joints_x_capt, joints_y_capt, 'o', color='c')
     _ = ax.plot(joints_x_cap2t, joints_y_cap2t, 'o', color='r')
     _ = ax.plot(joints_x_cap, joints_y_cap, 'o', color='b')
@@ -593,6 +809,9 @@ def plot_mainshock_damage_visual(displacement, periods, spectrum, acc, dt, n_pts
     plot_hinges(t, displacement, joints_x, joints_y, plot_scale, peak_joint_pos, peak_joint_neg,
                 hinge_yield_rotation_positive, hinge_cap_rotation_positive, hinge_yield_rotation_negative,
                 hinge_cap_rotation_negative, current_ax)
+    # plot_hinges_prob(t, displacement, joints_x, joints_y, plot_scale, peak_joint_pos, peak_joint_neg,
+    #             hinge_yield_rotation_positive, hinge_cap_rotation_positive, hinge_yield_rotation_negative,
+    #             hinge_cap_rotation_negative, current_ax)
     plt.tight_layout()
     plt.show()
 

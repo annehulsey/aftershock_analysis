@@ -125,11 +125,14 @@ def store_hinge_rotations(results_filename, building_group, model_path):
                         else:
                             hingeLabel = 0
 
-                        #                 print(hingeLabel)
-
                         if hingeLabel != 0:
                             # Find line with the hinge we are looking for
-                            key = 'CreateIbarraMaterial     ' + str(hingeLabel)
+
+                            # For original models
+                            # key = 'CreateIbarraMaterial     ' + str(hingeLabel)
+
+                            # For modified models
+                            key = 'CreateIbarraMaterial ' + str(hingeLabel)
 
                             res = [i for i in model_str if key in i]
                             matLine = str(res)
@@ -174,6 +177,116 @@ def store_hinge_rotations(results_filename, building_group, model_path):
         building_group.create_dataset(key, data=rotation_cap_negative)
         key = 'hinge_ultimate_rotation_negative'
         building_group.create_dataset(key, data=rotation_ultimate_negative)
+
+def store_hinge_rotations_modelUQ(results_filename, building_group, model_path, model_id):
+    ## Creates arrays with the rotation key points of the hinge backbone curves. Stores it in
+    # the group with name hf_group inside the h5 file results_filename
+    # INPUTS
+    #       results_filename: name of h5 file to store frame information
+    #       building_group: name of the group to store building metadata
+    #       model_path: path to locate the OpenSees tcl file with the material definitions
+    #       model_id: string with name of the group to save hinge properties
+
+    with h5py.File(results_filename, 'r+') as hf:
+        # Read frame geometry basics
+        building_group = hf[building_group]
+        n_stories = building_group.attrs['n_stories']
+        n_bays = building_group.attrs['n_bays']
+
+        # Open the model file and save in a list of string
+        with open(model_path) as model_file:
+            model_str = model_file.readlines()
+        model_file.close()
+
+        # Create arrays to store the joint rotation capacities
+        rotation_yield_positive = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+        rotation_cap_positive = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+        rotation_ultimate_positive = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+
+        rotation_yield_negative = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+        rotation_cap_negative = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+        rotation_ultimate_negative = np.zeros([n_stories + 1, n_bays + 1, 4, 1])
+
+        # Look for all 4 hinges around each joint
+        for floorIdx in range(1, (n_stories + 2)):
+            for colIdx in range(1, (n_bays + 2)):
+                j = 0
+                for eleSide in [1, 2]:
+                    # print(eleSide)
+                    # eleSide =   # For beams: 1 left hinge in right/current bay and 2 for right hinge in left bay
+                    # For columns: 1 is bottom hinge and 2 is top hinge
+                    for eleTypeIdx in [2, 3]:
+                        #       print(eleTypeIdx)
+                        # eleTypeIdx =  # 2 for beams and 3 for columns
+
+                        # Create hinge element tag
+                        bayIdx = colIdx + 1 - eleSide
+                        storyIdx = floorIdx - 2 + eleSide
+                        if floorIdx == 1 and j == 2:
+                            # Base column
+                            hingeLabel = 300000 + floorIdx * 1000 + colIdx * 10 + 1
+                        elif bayIdx > 0 and bayIdx <= n_bays and eleTypeIdx == 3 and floorIdx > 1:
+                            # Beam hinges
+                            hingeLabel = 200000 + floorIdx * 1000 + bayIdx * 10 + eleSide
+                        elif storyIdx <= n_stories and eleTypeIdx == 2 and floorIdx > 1:
+                            # Column hinges
+                            hingeLabel = 300000 + storyIdx * 1000 + colIdx * 10 + 1
+                        else:
+                            hingeLabel = 0
+
+                        if hingeLabel != 0:
+                            # Find line with the hinge we are looking for
+
+                            # For original models
+                            # key = 'CreateIbarraMaterial     ' + str(hingeLabel)
+
+                            # For modified models
+                            key = 'CreateIbarraMaterial ' + str(hingeLabel)
+
+                            res = [i for i in model_str if key in i]
+                            matLine = str(res)
+
+                            # Extract hinge rotation capacity
+                            matAssignments = matLine.split()
+
+                            EIeff = float(matAssignments[3])
+                            myPos = float(matAssignments[4])
+                            myNeg = float(matAssignments[5])
+                            thetaCapPos = float(matAssignments[7])
+                            thetaCapNeg = float(matAssignments[8])
+                            stiffFactor1 = 11
+                            eleLength = float(matAssignments[15])
+                            thetaPC = float(matAssignments[9])
+
+                            thetaCap = (thetaCapPos - thetaCapNeg) / 2
+
+                            elstk = stiffFactor1 * ((6 * EIeff) / eleLength)
+
+                            rotation_yield_positive[floorIdx-1, colIdx-1, j, 0] = myPos / elstk
+                            rotation_cap_positive[floorIdx-1, colIdx-1, j, 0] = myPos / elstk + thetaCap
+                            rotation_ultimate_positive[floorIdx-1, colIdx-1, j, 0] = myPos / elstk + thetaCap + thetaPC
+
+                            rotation_yield_negative[floorIdx-1, colIdx-1, j, 0] = myNeg / elstk
+                            rotation_cap_negative[floorIdx-1, colIdx-1, j, 0] = myNeg / elstk - thetaCap
+                            rotation_ultimate_negative[floorIdx-1, colIdx-1, j, 0] = myNeg / elstk - thetaCap - thetaPC
+
+                        j = j + 1
+
+        # Save in h5 file's building_group
+        key = 'model_' + model_id + '/hinge_yield_rotation_positive'
+        building_group.create_dataset(key, data=rotation_yield_positive)
+        key = 'model_' + model_id + '/hinge_cap_rotation_positive'
+        building_group.create_dataset(key, data=rotation_cap_positive)
+        key = 'model_' + model_id + '/hinge_ultimate_rotation_positive'
+        building_group.create_dataset(key, data=rotation_ultimate_positive)
+
+        key = 'model_' + model_id + '/hinge_yield_rotation_negative'
+        building_group.create_dataset(key, data=rotation_yield_negative)
+        key = 'model_' + model_id + '/hinge_cap_rotation_negative'
+        building_group.create_dataset(key, data=rotation_cap_negative)
+        key = 'model_' + model_id + '/hinge_ultimate_rotation_negative'
+        building_group.create_dataset(key, data=rotation_ultimate_negative)
+
 
 def collect_gm_metadata(gm_files, results_filename, gm_group):
 
@@ -278,7 +391,7 @@ def collect_ida_results(ida_folder, gm_metadata, results_filename, ida_results_g
         # add the collapse point
         last_intensity = ida_curve.iloc[-1:].values[0][0]
         sa_t1_col = last_intensity + 0.01
-        ida_curve.loc[len(ida_curve)] = [sa_t1_col, 0.1]
+        ida_curve.loc[len(ida_curve)] = [sa_t1_col, 0.2]
         # add intensities as Sa_avg and scale factors
         sa_t1 = ida_curve['Sa(T1)'].values
         sf = sa_t1 / gm_metadata['Unscaled Sa(T1)'][idx_number]
@@ -303,6 +416,53 @@ def collect_ida_results(ida_folder, gm_metadata, results_filename, ida_results_g
     for im in ['Sa(T1)', 'Sa_avg']:
         collapse_fragilities.loc[im, :] = compute_ida_fragility(collapse_intensities[im], plot=True)
     key = ida_results_group + '/collapse_fragilities'
+    collapse_fragilities.to_hdf(results_filename, key=key)
+
+
+def collect_ida_results_modelUQ(ida_folder, gm_metadata, results_filename, ida_results_group, model_id):
+    gm_ids = gm_metadata.index
+    n_gms = len(gm_ids)
+
+    collapse_values = np.zeros((n_gms, 3))
+
+    # loop through results for each ground motion
+    for i in range(n_gms):
+        gm_id = gm_ids[i]
+        gm_number = int(gm_id[2:])
+        idx_number = gm_number - 1
+
+        # read the ida curve
+        ida_intensities_file = posixpath.join(ida_folder, 'AnalysisResult_' + model_id, 'IDA', 'FEMAP695', gm_id + './ida_curve.txt')
+        ida_curve = pd.read_csv(ida_intensities_file, sep='\t', header=None,
+                                names=['Sa(T1)', 'Story Drift Ratio (max)'])
+        # add the collapse point
+        last_intensity = ida_curve.iloc[-1:].values[0][0]
+        sa_t1_col = last_intensity + 0.01
+        ida_curve.loc[len(ida_curve)] = [sa_t1_col, 0.1]
+        # add intensities as Sa_avg and scale factors
+        sa_t1 = ida_curve['Sa(T1)'].values
+        sf = sa_t1 / gm_metadata['Unscaled Sa(T1)'][idx_number]
+        ida_curve.insert(loc=0, column='Scale Factor', value=sf)
+        sa_avg = sf * gm_metadata['Unscaled Sa_avg'][idx_number]
+        ida_curve.insert(loc=2, column='Sa_avg', value=sa_avg)
+
+        # save ida curve
+        key = ida_results_group + '/' + gm_id + '/ida_curve/model_' + model_id
+        ida_curve.to_hdf(results_filename, key=key)
+
+        # store collapse values
+        collapse_values[idx_number, :] = [sf[-1], sa_t1[-1], sa_avg[-1]]
+
+    # save collapse intensities
+    collapse_intensities = pd.DataFrame(collapse_values, index=gm_ids, columns=['Scale Factor', 'Sa(T1)', 'Sa_avg'])
+    key = ida_results_group + '/collapse_intensities' + '/model_' + model_id
+    collapse_intensities.to_hdf(results_filename, key=key)
+
+    # save collapse fragilities
+    collapse_fragilities = pd.DataFrame(columns=['Median', 'Beta'], dtype='float64')
+    for im in ['Sa(T1)', 'Sa_avg']:
+        collapse_fragilities.loc[im, :] = compute_ida_fragility(collapse_intensities[im], plot=True)
+    key = ida_results_group + '/collapse_fragilities' + '/model_' + model_id
     collapse_fragilities.to_hdf(results_filename, key=key)
 
 
