@@ -11,6 +11,7 @@ from sklearn.model_selection import RepeatedKFold
 import sklearn.linear_model as skl
 import scipy as sp
 import matplotlib as mpl
+import random
 
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
@@ -28,9 +29,9 @@ from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
 def set_plot_formatting():
     # set up plot formatting
-    SMALL_SIZE = 15
-    MEDIUM_SIZE = 18
-    BIGGER_SIZE = 25
+    SMALL_SIZE = 12#15
+    MEDIUM_SIZE = 15#18
+    BIGGER_SIZE = 18#25
 
     plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
     plt.rc('axes', titlesize=MEDIUM_SIZE)    # fontsize of the axes title
