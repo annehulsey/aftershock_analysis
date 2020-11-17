@@ -1073,12 +1073,12 @@ def predictPieceWiseFunc3LinLS(x, parameters, x_data_space):
 
     x = x.flatten()
 
-    a_opt = parameters["Threshold limit"][0]
-    amin_opt = parameters["Minimum limit"][0]
-    b1_opt = parameters["Slope 1"][0]
-    b2_opt = parameters["Slope 2"][0]
-    x_min = parameters["x_min"][0]
-    k_max = parameters["k_max"][0]
+    a_opt = parameters["Threshold limit"]
+    amin_opt = parameters["Minimum limit"]
+    b1_opt = parameters["Slope 1"]
+    b2_opt = parameters["Slope 2"]
+    x_min = parameters["x_min"]
+    k_max = parameters["k_max"]
 
     x[x <= x_min] = x_min
 
@@ -1252,13 +1252,10 @@ def fitPieceWiseFunc2LinLS_oneGuess(DIname, x, y, a_min, x_data_space):
     return parameters_DI
 
 
-
-def plotDIvsk3Lin(x, y, x_limits, parameters, y_label, x_data_space, plot_i, color_specs, color_line, building_title):
+def plotDIvsk3Lin(x_limits, parameters, y_label, x_data_space, plot_i, color_specs, color_line, building_title):
     # Plot several damage indicators vs k including fitted function to observe their behavior
     #
     # INPUTS
-    #     x            = 1D np.array with the values of the damage indicator to plot
-    #     y            = 1D np.array with the values of the reduction in collapse capacity to plot
     #     x_limits     = [x_min, x_max] to plot
     #                    if 999 takes extremes of vector x for plot limits
     #                    if vector with one entry only, use it as minimum limit
@@ -1285,21 +1282,24 @@ def plotDIvsk3Lin(x, y, x_limits, parameters, y_label, x_data_space, plot_i, col
     elif len(x_limits) == 1:
         x_limits = [x_limits[0], max(x)]
 
-    x[x <= x_min] = x_min
-
     x_label = parameters.index.values[0]
 
+    # Set percentage data
+    if parameters.index.values[0] == "$SDR_{peak}$" or \
+            parameters.index.values[0] == "$RSDR_{peak}$" or \
+            parameters.index.values[0] == "Beams DS$\geq$1" or \
+            parameters.index.values[0] == "Columns DS$\geq$1":
+        a_plot = 100 * np.array(a_plot)
+        x_limits = 100 * np.array(x_limits)
+
+    # Locate the subplot
     if plot_i >= 0:
-        # Locate the subplot
         if plot_i <= 2:
             ax = plt.subplot2grid((3, 3), (0, plot_i), rowspan=1, colspan=1)
         elif plot_i <= 5:
             ax = plt.subplot2grid((3, 3), (1, plot_i - 3), rowspan=1, colspan=1)
         else:
             ax = plt.subplot2grid((3, 3), (2, plot_i - 6), rowspan=1, colspan=1)
-
-    # Plot analysis results
-    ax = plt.scatter(x, y, s=10, color=color_specs, alpha=0.3)
 
     # Add reference line at Dmin and a
     ax = plt.plot([a_plot[2], a_plot[2]], [0, 1], linestyle='--', Color='gray', label='_nolegend_')
@@ -1324,15 +1324,33 @@ def plotDIvsk3Lin(x, y, x_limits, parameters, y_label, x_data_space, plot_i, col
         _ = ax.xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda y, _: '{:.2g}'.format(y)))
 
     # Title
-    if parameters.index.values[0] == "DI hinges" or parameters.index.values[0] == "$FDI_{peak}$" or \
-            parameters.index.values[0][0:3] == "$DI" or parameters.index.values[0][0:3] == "$Sa":
-        title_text = "$a_{1}$ = " + str(round(a_plot[1], 4)) + "\n $a_{2}$ = " + str(round(a_plot[2], 2))
-    else:
-        title_text = "$a_{1}$ = " + str(round(a_plot[1] * 100, 2)) + "% \n $a_{2}$ = " + str(round(a_plot[2] * 100, 2)) + "%"
-    if building_title != 0:
-        title_text = building_title + "\n" + title_text
+    # if parameters.index.values[0] == "DI hinges" or parameters.index.values[0] == "$FDI_{peak}$" or \
+    #         parameters.index.values[0][0:3] == "$DI" or parameters.index.values[0][0:3] == "$Sa":
+    #     title_text = "$a_{1}$ = " + str(round(a_plot[1], 4)) + "\n $a_{2}$ = " + str(round(a_plot[2], 2))
+    # else:
+    #     title_text = "$a_{1}$ = " + str(round(a_plot[1] * 100, 2)) + "% \n $a_{2}$ = " + str(round(a_plot[2] * 100, 2)) + "%"
+    # if building_title != 0:
+    #     title_text = building_title + "\n" + title_text
+    # ax = plt.title(title_text)
 
-    ax = plt.title(title_text)
+    # Kink annotations
+    if parameters.index.values[0] == "$SDR_{peak}$" or \
+            parameters.index.values[0] == "$RSDR_{peak}$" or \
+            parameters.index.values[0] == "Beams DS$\geq$1" or \
+            parameters.index.values[0] == "Columns DS$\geq$1":
+        text_a1 = '$a_1$ = {0:.2f}%'.format(a_plot[1])
+        text_a2 = '$a_2$ = {0:.1f}%'.format(a_plot[2])
+        ax = plt.gca()
+        ax.xaxis.set_major_formatter(mpl.ticker.PercentFormatter(decimals=2))
+    else:
+        text_a1 = '$a_1$ = {0:.3f}'.format(a_plot[1])
+        text_a2 = '$a_2$ = {0:.2f}'.format(a_plot[2])
+
+    y_text = 0.3
+    rotation = 90
+    _ = ax.text(a_plot[1], y_text, text_a1, rotation=rotation, ha='right', fontsize=15)
+    _ = ax.text(a_plot[2], y_text, text_a2, rotation=rotation, ha='right', fontsize=15)
+
 
 def plotResiduals(DI_name, x, parameters, y_label, x_data_space, plot_i):
     # Plot the residuals of

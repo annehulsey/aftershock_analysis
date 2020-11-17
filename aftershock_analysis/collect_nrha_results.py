@@ -129,10 +129,10 @@ def store_hinge_rotations(results_filename, building_group, model_path):
                             # Find line with the hinge we are looking for
 
                             # For original models
-                            # key = 'CreateIbarraMaterial     ' + str(hingeLabel)
+                            key = 'CreateIbarraMaterial     ' + str(hingeLabel)
 
                             # For modified models
-                            key = 'CreateIbarraMaterial ' + str(hingeLabel)
+                            #key = 'CreateIbarraMaterial ' + str(hingeLabel)
 
                             res = [i for i in model_str if key in i]
                             matLine = str(res)
@@ -298,10 +298,6 @@ def collect_gm_metadata(gm_files, results_filename, gm_group):
      gm_acc_folder] = gm_files
 
     gm_metadata = pd.read_csv(gm_metadata_file, sep='\t')
-    n_gms = len(gm_metadata)
-    gm_ids = ['GM' + str(i + 1) for i in range(n_gms)]
-    gm_metadata['id'] = gm_ids
-    gm_metadata.set_index('id', inplace=True)
 
     with open(gm_sa_t1_file, 'r') as file:
         im = file.read().splitlines()
@@ -320,19 +316,27 @@ def collect_gm_metadata(gm_files, results_filename, gm_group):
     gm_metadata['Sa_ratio'] = sa_ratio
 
     durations = pd.read_csv(gm_duration_file, sep='\t')
-    gm_metadata['Duration_5-75'] = durations[' t_s575 '].values
+    gm_metadata['Duration_5-75'] = durations[' Ds575 '].values
 
     response_spectra = pd.read_csv(gm_spectra_file, sep='\t', index_col='Record ')
-    new_col = [x.strip() for x in response_spectra.columns]
     new_index = [x.strip() for x in response_spectra.index]
-    response_spectra['id'] = new_index
+
+    # Removes file ext if need be
+    if "." in new_index[0]:
+        new_index = [x[0:-4] for x in new_index]
+
+    gm_ids = new_index
+    gm_metadata['id'] = gm_ids
+    gm_metadata.set_index('id', inplace=True)
+    response_spectra['id'] = gm_ids
+
+    new_col = [x.strip() for x in response_spectra.columns]
     response_spectra.set_index('id', inplace=True)
-    response_spectra.columns = new_col
-    periods = [float(x[3:-2]) for x in new_col]
+    response_spectra.columns = new_col[0:len(response_spectra.columns)]
+    periods = [float(x[3:-2]) for x in new_col[0:len(response_spectra.columns)]]
 
     key = '/ground_motion_records/gm_response_spectra'
     response_spectra.to_hdf(results_filename, key=key)
-
 
     with h5py.File(results_filename, 'r+') as hf:
         gm_group = hf[gm_group]
@@ -342,22 +346,26 @@ def collect_gm_metadata(gm_files, results_filename, gm_group):
         for gm_id in gm_ids:
             gm_record_group = gm_group.create_group(gm_id)
 
-            gm_record_group.attrs['rsn'] = gm_metadata.loc[gm_id, 'RSN']
+            # gm_record_group.attrs['rsn'] = gm_metadata.loc[gm_id, 'RSN']
             gm_record_group.attrs['event'] = gm_metadata.loc[gm_id, 'eventName']
             gm_record_group.attrs['date'] = gm_metadata.loc[gm_id, 'Date']
             gm_record_group.attrs['station'] = gm_metadata.loc[gm_id, 'Station']
             gm_record_group.attrs['magnitude'] = gm_metadata.loc[gm_id, 'M']
             gm_record_group.attrs['r_rup'] = gm_metadata.loc[gm_id, 'Rup']
             gm_record_group.attrs['r_jb'] = gm_metadata.loc[gm_id, 'Rjb']
-            gm_record_group.attrs['vs30'] = gm_metadata.loc[gm_id, 'Vs30']
-            gm_record_group.attrs['region'] = gm_metadata.loc[gm_id, 'region']
-            gm_record_group.attrs['fault_type'] = gm_metadata.loc[gm_id, 'Fault_Type']
-            gm_record_group.attrs['component'] = gm_metadata.loc[gm_id, 'Component']
+            # gm_record_group.attrs['vs30'] = gm_metadata.loc[gm_id, 'Vs30']
+            # gm_record_group.attrs['region'] = gm_metadata.loc[gm_id, 'region']
+            # gm_record_group.attrs['fault_type'] = gm_metadata.loc[gm_id, 'Fault_Type']
+            # gm_record_group.attrs['component'] = gm_metadata.loc[gm_id, 'Component']
             gm_record_group.attrs['unscaled_sa_t1'] = gm_metadata.loc[gm_id, 'Unscaled Sa(T1)']
             gm_record_group.attrs['unscaled_sa_avg'] = gm_metadata.loc[gm_id, 'Unscaled Sa_avg']
 
             # acceleration time history
-            gm_acc_file = posixpath.join(gm_acc_folder, gm_id + '.txt')
+            if gm_id[0:2] == 'GM':
+                gm_acc_file = posixpath.join(gm_acc_folder, gm_id + '.txt')
+            else:
+                gm_acc_file = posixpath.join(gm_acc_folder, gm_id + '.AT2')
+
             with open(gm_acc_file, 'r') as file:
                 acc = np.array([float(x) for x in file.read().splitlines()])
             dset = gm_record_group.create_dataset('acceleration_time_history', data=acc)
@@ -372,7 +380,7 @@ def collect_gm_metadata(gm_files, results_filename, gm_group):
     return gm_metadata
 
 
-def collect_ida_results(ida_folder, gm_metadata, results_filename, ida_results_group):
+def collect_ida_results_sf(ida_folder, gm_metadata, results_filename, ida_results_group):
     gm_ids = gm_metadata.index
     n_gms = len(gm_ids)
 
@@ -383,6 +391,53 @@ def collect_ida_results(ida_folder, gm_metadata, results_filename, ida_results_g
         gm_id = gm_ids[i]
         gm_number = int(gm_id[2:])
         idx_number = gm_number - 1
+
+        # read the ida curve
+        ida_intensities_file = posixpath.join(ida_folder, gm_id + './ida_curve.txt')
+        ida_curve = pd.read_csv(ida_intensities_file, sep='\t', header=None,
+                                names=['Scale Factor', 'Story Drift Ratio (max)'])
+        # add the collapse point
+        last_intensity = ida_curve.iloc[-1:].values[0][0]
+        sa_t1_col = last_intensity + 0.01
+        ida_curve.loc[len(ida_curve)] = [sa_t1_col, 0.2]
+        # add intensities as Sa_avg and scale factors
+        sf = ida_curve['Scale Factor'].values
+        sa_t1 = sf * gm_metadata['Unscaled Sa(T1)'][idx_number]
+        ida_curve.insert(loc=0, column='Sa(T1)', value=sa_t1)
+        sa_avg = sf * gm_metadata['Unscaled Sa_avg'][idx_number]
+        ida_curve.insert(loc=2, column='Sa_avg', value=sa_avg)
+
+        # save ida curve
+        key = ida_results_group + '/' + gm_id + '/ida_curve'
+        ida_curve.to_hdf(results_filename, key=key)
+
+        # store collapse values
+        collapse_values[idx_number, :] = [sf[-1], sa_t1[-1], sa_avg[-1]]
+
+    # save collapse intensities
+    collapse_intensities = pd.DataFrame(collapse_values, index=gm_ids, columns=['Scale Factor', 'Sa(T1)', 'Sa_avg'])
+    key = ida_results_group + '/collapse_intensities'
+    collapse_intensities.to_hdf(results_filename, key=key)
+
+    # save collapse fragilities
+    collapse_fragilities = pd.DataFrame(columns=['Median', 'Beta'], dtype='float64')
+    for im in ['Sa(T1)', 'Sa_avg']:
+        collapse_fragilities.loc[im, :] = compute_ida_fragility(collapse_intensities[im], plot=True)
+    key = ida_results_group + '/collapse_fragilities'
+    collapse_fragilities.to_hdf(results_filename, key=key)
+
+
+def collect_ida_results(ida_folder, gm_metadata, results_filename, ida_results_group):
+    gm_ids = gm_metadata.index
+    n_gms = len(gm_ids)
+
+    collapse_values = np.zeros((n_gms, 3))
+
+    # loop through results for each ground motion
+    for i in range(n_gms):
+        gm_id = gm_ids[i]
+        # gm_number = int(gm_id[2:])
+        idx_number = i #gm_number - 1
 
         # read the ida curve
         ida_intensities_file = posixpath.join(ida_folder, gm_id + './ida_curve.txt')
@@ -417,6 +472,59 @@ def collect_ida_results(ida_folder, gm_metadata, results_filename, ida_results_g
         collapse_fragilities.loc[im, :] = compute_ida_fragility(collapse_intensities[im], plot=True)
     key = ida_results_group + '/collapse_fragilities'
     collapse_fragilities.to_hdf(results_filename, key=key)
+
+
+def collect_ida_results_not_finished(ida_folder, gm_metadata, results_filename, ida_results_group):
+    gm_ids = gm_metadata.index
+    n_gms = len(gm_ids)
+
+    collapse_values = np.zeros((n_gms, 3))
+
+    # loop through results for each ground motion
+    for i in range(n_gms):
+        gm_id = gm_ids[i]
+        gm_number = int(gm_id[2:])
+        idx_number = gm_number - 1
+
+        # read the ida curve from completed scales file
+        ida_intensities_file = posixpath.join(ida_folder, gm_id + './tolerance_note.txt')
+        ida_curve_temp = pd.read_csv(ida_intensities_file, sep='\t', header=None,
+                                names=['Sa(T1)', 'Story Drift Ratio (max)', '', '', 'max SDR before collapse', 'convergence', ''])
+
+        sa_t1 = ida_curve_temp['Sa(T1)'].values
+        sdr = ida_curve_temp['Story Drift Ratio (max)'].values
+        sdr[sdr == np.inf] = 0.10
+        order = np.argsort(sdr)
+        sdr = sdr[order]
+        sa_t1 = sa_t1[order]
+
+        ida_curve = pd.DataFrame(data=np.vstack((sa_t1, sdr)).reshape(len(sdr), 2), columns=['Sa(T1)', 'Story Drift Ratio (max)'])
+
+        # add intensities as Sa_avg and scale factors
+        sf = sa_t1 / gm_metadata['Unscaled Sa(T1)'][idx_number]
+        ida_curve.insert(loc=0, column='Scale Factor', value=sf)
+        sa_avg = sf * gm_metadata['Unscaled Sa_avg'][idx_number]
+        ida_curve.insert(loc=2, column='Sa_avg', value=sa_avg)
+
+        # save ida curve
+        key = ida_results_group + '/' + gm_id + '/ida_curve'
+        ida_curve.to_hdf(results_filename, key=key)
+
+        # store collapse values
+        collapse_values[idx_number, :] = [sf[-1], sa_t1[-1], sa_avg[-1]]
+
+    # save collapse intensities
+    collapse_intensities = pd.DataFrame(collapse_values, index=gm_ids, columns=['Scale Factor', 'Sa(T1)', 'Sa_avg'])
+    key = ida_results_group + '/collapse_intensities'
+    collapse_intensities.to_hdf(results_filename, key=key)
+
+    # save collapse fragilities
+    collapse_fragilities = pd.DataFrame(columns=['Median', 'Beta'], dtype='float64')
+    for im in ['Sa(T1)', 'Sa_avg']:
+        collapse_fragilities.loc[im, :] = compute_ida_fragility(collapse_intensities[im], plot=True)
+    key = ida_results_group + '/collapse_fragilities'
+    collapse_fragilities.to_hdf(results_filename, key=key)
+
 
 
 def collect_ida_results_modelUQ(ida_folder, gm_metadata, results_filename, ida_results_group, model_id):
@@ -845,7 +953,7 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
                     edp_results[i,:] = np.squeeze(time_history.iloc[:,-1])
                 except:
                     edp_results[i, :] = np.squeeze(time_history.iloc[:-1, -1])
-            dset = edp_results_group.create_dataset(edp_name, data=edp_results)
+            # dset = edp_results_group.create_dataset(edp_name, data=edp_results)
 
             edp_name = 'peak_story_drift'
             peak_results = np.max(np.abs(edp_results), axis=1)
@@ -857,10 +965,10 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
             dset = edp_results_group.create_dataset(edp_name, data=residual_results)
             dset.attrs['max_residual_story_drift'] = np.max(np.abs(residual_results))
 
-            edp_name = 'between_story_drift_time_history'
-            edp_results = np.append(np.zeros((1, n_pts)), edp_results, axis=0)
-            edp_results = edp_results[1:, :] - edp_results[:-1, :]
-            dset = edp_results_group.create_dataset(edp_name, data=edp_results)
+            # edp_name = 'between_story_drift_time_history'
+            # edp_results = np.append(np.zeros((1, n_pts)), edp_results, axis=0)
+            # edp_results = edp_results[1:, :] - edp_results[:-1, :]
+            # dset = edp_results_group.create_dataset(edp_name, data=edp_results)
 
             edp_name = 'residual_between_story_drift'
             residual_results = np.median(edp_results[:, residual_start_idx:], axis=1)
@@ -880,8 +988,8 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
                     edp_results[i,:] = np.squeeze(time_history.iloc[:,-1])
                 except:
                     edp_results[i, :] = np.squeeze(time_history.iloc[:-1, -1])
-            dset = edp_results_group.create_dataset(edp_name, data=edp_results)
-            dset.attrs['units'] = 'inches'
+            # dset = edp_results_group.create_dataset(edp_name, data=edp_results)
+            # dset.attrs['units'] = 'inches'
 
             edp_name = 'peak_displacement'
             peak_results = np.max(np.abs(edp_results), axis=1)
@@ -961,10 +1069,10 @@ def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_gr
                         hingeRotDemandsResidual[floorIdx-1,colIdx-1,2,0] = np.median(results.top[residual_start_idx:])
 
             # Defines pointer for storing the joint demands
-            edp_name = 'joint_rotations_time_history'
-            dset = edp_results_group.create_dataset(edp_name, data=hingeRotDemandsTH)
-            dset.attrs['units'] = 'rad'
-            dset.attrs['Hinge locations'] = '0: Bottom; 1: Right; 2: Top; 3: Left'
+            # edp_name = 'joint_rotations_time_history'
+            # dset = edp_results_group.create_dataset(edp_name, data=hingeRotDemandsTH)
+            # dset.attrs['units'] = 'rad'
+            # dset.attrs['Hinge locations'] = '0: Bottom; 1: Right; 2: Top; 3: Left'
 
             edp_name = 'peak_joint_rotations_pos'
             dset = edp_results_group.create_dataset(edp_name, data=hingeRotDemandsPeakPos)
