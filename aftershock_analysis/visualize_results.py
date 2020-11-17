@@ -249,7 +249,7 @@ def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fra
     damaged_group = 'mainshock_damage_results'
     fragility_linewidth = 3
 
-    DriftLimit = 0.2
+    DriftLimit = 0.1
 
     with h5py.File(results_filename, 'r') as hf:
         ida_fragilities = ida_intact_fragility.copy()
@@ -259,7 +259,7 @@ def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fra
 
         # To plot selected mainshock intensities
         stripes_total = list(hf[damaged_group][gm_id].keys())
-        stripes = ['0.2Col', '0.4Col', '0.7Col', '0.8Col']
+        stripes = ['0.2Col', '0.4Col', '0.6Col', '0.8Col']
         index = [True] # intact
         for i, a_i in enumerate(stripes_total):
             if stripes.count(a_i) > 0:
@@ -281,11 +281,11 @@ def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fra
             # intact ida
             current_ax = ax[0][0]
             ida_ylim = [0, 1.1 * np.amax(intact_ida_segments[:, :, 1])]
-            full_ida_plot = LineCollection(intact_ida_segments, linewidths=1, colors='lightgray', linestyle='solid')
+            full_ida_plot = LineCollection(intact_ida_segments, linewidths=1, colors='gray', linestyle='solid')
             _ = current_ax.add_collection(full_ida_plot)
             _ = current_ax.set_xlim(0, DriftLimit)
             _ = current_ax.set_ylim(ida_ylim)
-            _ = current_ax.set_ylabel('Sa$_{avg}$(T$_1$), [g]')
+            _ = current_ax.set_ylabel('$Sa_{avg}$(T), [g]')
             _ = current_ax.set_xlabel('Peak Story Drift Ratio')
 
             _ = current_ax.plot(intact_ida_segments[i, :, 0], intact_ida_segments[i, :, 1], color='k', linewidth=2.5,
@@ -294,7 +294,7 @@ def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fra
 
             if True:
                 current_ax = ax[1][0]
-                full_ida_plot = LineCollection(intact_ida_segments, linewidths=1, colors='lightgray', linestyle='solid')
+                full_ida_plot = LineCollection(intact_ida_segments, linewidths=1, colors='gray', linestyle='solid')
                 _ = current_ax.add_collection(full_ida_plot)
 
             # mainshock responses
@@ -320,7 +320,7 @@ def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fra
             x = stats.lognorm(beta, scale=median).ppf(y)
             label = 'No Mainshock' + '\n$IM_{0.5}=$' + '{0:.2f}'.format(median) + ' $\sigma_{ln}=$' + '{0:.2f}'.format(
                 beta)
-            _ = current_ax.plot(x, 100 * y, label=label, color='C' + str(s), linewidth=2.5)
+            _ = current_ax.plot(x, 100 * y, label=label, color='gray', linewidth=2.5)
 
             key = '/intact_results/ida/collapse_intensities'
             collapse_intensities = pd.read_hdf(results_filename, key)['Sa_avg'].to_numpy()
@@ -374,17 +374,17 @@ def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fra
             _ = current_ax.legend(title=legend_title, bbox_to_anchor=(1, 0.5), loc='center left')
             _ = current_ax.set_ylabel('Probability of Collapse')
             _ = current_ax.set_ylim(0, 100)
-            _ = current_ax.set_xlabel('Sa$_{avg}$(T$_1$), [g]')
+            _ = current_ax.set_xlabel('$Sa_{avg}$(T), [g]')
             _ = current_ax.grid('on')
 
             current_ax = ax[1][0]
             _ = current_ax.set_xlim(0, DriftLimit)
             _ = current_ax.set_ylim(ida_ylim)
-            _ = current_ax.set_ylabel('Sa$_{avg}$(T$_1$), [g]')
+            _ = current_ax.set_ylabel('$Sa_{avg}$(T), [g]')
             _ = current_ax.set_xlabel('Peak Story Drift Ratio')
 
             current_ax = ax[0][1]
-            _ = current_ax.set_ylabel('Sa$_{avg}$(T$_1$), [g]')
+            _ = current_ax.set_ylabel('$Sa_{avg}$(T), [g]')
             _ = current_ax.set_xlabel('Story Drift Ratio')
 
             # add reference points to ida
@@ -393,7 +393,13 @@ def plot_damaged_ida_per_gm(gm_id, results_filename, gm_metadata, ida_intact_fra
             stripe_values = sa_avg_col * np.insert(np.array([float(x[:-3]) for x in stripes]), 0, 0)
             x = np.interp(stripe_values, intact_ida_segments[i, :, 1], intact_ida_segments[i, :, 0])
             color = ['C' + str(k) for k in range(len(stripe_values))]
-            _ = current_ax.scatter(x, stripe_values, color=color, zorder=50, s=100)
+            _ = current_ax.scatter(x, stripe_values, color=color, edgecolors='k', zorder=50, s=100)
+
+            # Add collapse points to ida (intact fragility)
+            col_im = gm_metadata['Intact Collapse Sa_avg']
+            x = np.ones(len(col_im))*(DriftLimit*0.992)
+            _ = current_ax.scatter(x, col_im, color='tab:blue', zorder=50, s=20,
+                                   edgecolors='k', linewidth=0.5)
 
             # add reference points to mainshocks
             current_ax = ax[0][1]
@@ -592,32 +598,31 @@ def plot_building_at_t(t, edp, columns, beams, plot_scale, ax):
     i_beam = 0
     for i_story in range(n_stories):
         for i_end in range(2):
-            columns_t[i_col:i_col + n_bays + 2, i_end, 0] = columns[i_col:i_col + n_bays + 2, i_end, 0] + plot_scale * \
-                                                                                                          edp[
-                                                                                                              i_story + i_end, t]
+            columns_t[i_col:i_col + n_bays + 2, i_end, 0] = columns[i_col:i_col + n_bays + 2, i_end, 0] + \
+                                                            plot_scale * edp[i_story + i_end, t]
         i_col = i_col + n_bays + 1
 
-        beams_t[i_beam:i_beam + n_bays + 1, :, 0] = beams[i_beam:i_beam + n_bays + 1, :, 0] + plot_scale * edp[
-            i_story + 1, t]
+        beams_t[i_beam:i_beam + n_bays + 1, :, 0] = beams[i_beam:i_beam + n_bays + 1, :, 0] + \
+                                                    plot_scale * edp[i_story + 1, t]
         i_beam = i_beam + n_bays
 
-    column_collection = LineCollection(columns, color='darkgray', linestyle='--')
+    column_collection = LineCollection(columns, color='darkgray', linestyle='-')
     _ = ax.add_collection(column_collection)
 
-    beam_collection = LineCollection(beams, color='darkgray', linestyle='--')
+    beam_collection = LineCollection(beams, color='darkgray', linestyle='-')
     _ = ax.add_collection(beam_collection)
 
-    column_collection = LineCollection(columns_t, color='k', linestyle='--')
+    column_collection = LineCollection(columns_t, color='k', linestyle='-')
     _ = ax.add_collection(column_collection)
 
-    beam_collection = LineCollection(beams_t, color='k', linestyle='--')
+    beam_collection = LineCollection(beams_t, color='k', linestyle='-')
     _ = ax.add_collection(beam_collection)
 
     _ = ax.axis('scaled')
 
     building_height = np.max(columns[:, :, 1])
     building_width = np.max(columns[:, :, 0])
-    y_gap = 20
+    y_gap = 100
     x_gap = 500
     _ = ax.set_xlim(-x_gap, building_width + x_gap)
     _ = ax.set_ylim(0, building_height + y_gap)
