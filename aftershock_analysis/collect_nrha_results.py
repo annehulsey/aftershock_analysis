@@ -811,23 +811,47 @@ def plot_msa_fragility(median, beta, stripe_values, percent_collapses):
     plt.show()
 
 
-def collect_damaged_results(damaged_folder, gm_metadata, results_filename, damaged_group, building_group, result_type):
+def collect_damaged_results(damaged_folder, gm_metadata, results_filename, damaged_group, building_group, result_type,
+                            main_shock_name='', main_shock_sf=[]):
     gm_ids = gm_metadata.index
 
     if result_type != 'mainshock_edp':
 
         all_mainshocks = os.listdir(damaged_folder)
 
-        for gm_id in gm_ids:
+        if main_shock_name == '':
+            main_shock_name = gm_ids  # ground motions numbered as GM1, GM2, etc
+        else:
+            folder_idx = 0
 
+        for gm_id in main_shock_name:
+
+            # Retrieve folder names of back to back IDA runs
             gm_id_mainshocks = [i for i in all_mainshocks if gm_id + '_' in i]
-            scales = np.sort([float(x[-6:-3]) for x in gm_id_mainshocks])
+
+            # Recover the scale for the mainshock from the name of the folder
+            if main_shock_name == '':
+                scales = np.sort([float(x[-6:-3]) for x in gm_id_mainshocks])
+            else:
+                scales = main_shock_sf
 
             for scale in scales:
-                gm_scale_group = create_damaged_gm_scale_group(results_filename, damaged_group, gm_id, scale, gm_metadata)
+                # Creates group in the H5 file
+                if main_shock_name == '':
+                    # mainshock scaled based on collapse intensity
+                    gm_scale_group = create_damaged_gm_scale_group(results_filename, damaged_group, gm_id, scale,
+                                                                   gm_metadata)
+                    scale_name = str(scale) + 'Col'
+                    gm_scale_folder = posixpath.join(damaged_folder, gm_id + '_' + scale_name)
+                else:
+                    # mainshock scaled based on SF
+                    gm_id_mainshocks_curr = [i for i in gm_id_mainshocks if gm_id + '_SF' + str(scale) in i]
+                    print(gm_id_mainshocks_curr)
+                    gm_scale_group = create_damaged_gm_scale_group(results_filename, damaged_group, gm_id, scale, '')
+                    # gm_scale_folder = posixpath.join(damaged_folder, gm_id_mainshocks[folder_idx])
+                    gm_scale_folder = posixpath.join(damaged_folder, gm_id_mainshocks_curr[0])
+                    folder_idx += 1
 
-                scale_name = str(scale) + 'Col'
-                gm_scale_folder = posixpath.join(damaged_folder, gm_id + '_' + scale_name)
                 print(gm_scale_folder)
                 if result_type == 'msa_sa_avg':
                     with h5py.File(results_filename, 'r+') as hf:
@@ -848,7 +872,7 @@ def collect_damaged_results(damaged_folder, gm_metadata, results_filename, damag
 
         scales = np.sort([float(x[3:]) for x in os.listdir(damaged_folder)])
 
-        remove_idx = scales==1.0
+        remove_idx = scales == 1.0
         scales = scales[~remove_idx]
 
         peak_drift_max = pd.DataFrame(index=gm_ids, columns=scales, dtype='float64')
@@ -858,7 +882,8 @@ def collect_damaged_results(damaged_folder, gm_metadata, results_filename, damag
             scale_name = 'STR' + str(scale) + '0'
 
             for gm_id in gm_ids:
-                gm_scale_group = create_damaged_gm_scale_group(results_filename, damaged_group, gm_id, scale, gm_metadata)
+                gm_scale_group = create_damaged_gm_scale_group(results_filename, damaged_group, gm_id, scale,
+                                                               gm_metadata)
                 edp_folder = damaged_folder + '/' + scale_name + '/' + gm_id
 
                 with h5py.File(results_filename, 'r+') as hf:
@@ -880,7 +905,6 @@ def collect_damaged_results(damaged_folder, gm_metadata, results_filename, damag
 
 
 def create_damaged_gm_scale_group(results_filename, damaged_group, gm_id, scale, gm_metadata):
-
     with h5py.File(results_filename, 'r+') as hf:
         damaged_group = hf[damaged_group]
 
@@ -889,21 +913,78 @@ def create_damaged_gm_scale_group(results_filename, damaged_group, gm_id, scale,
         else:
             gm_damaged_group = damaged_group.create_group(gm_id)
 
-        scale_name = str(scale) + 'Col'
+        if gm_metadata != '':
+            scale_name = str(scale) + 'Col'
+        else:
+            scale_name = 'SF_' + str(scale)
+
         if scale_name in gm_damaged_group.keys():
             gm_scale_group = gm_damaged_group[scale_name]
         else:
             gm_scale_group = gm_damaged_group.create_group(scale_name)
 
-            collapse_intensity = gm_metadata.loc[gm_id, ['Intact Collapse Scale Factor',
-                                                         'Intact Collapse Sa(T1)',
-                                                         'Intact Collapse Sa_avg']].values
+            if gm_metadata != '':
+                collapse_intensity = gm_metadata.loc[gm_id, ['Intact Collapse Scale Factor',
+                                                             'Intact Collapse Sa(T1)',
+                                                             'Intact Collapse Sa_avg']].values
 
-            gm_scale_group.attrs['scale_factor'] = scale * collapse_intensity[0]
-            gm_scale_group.attrs['sa_t1'] = scale * collapse_intensity[1]
-            gm_scale_group.attrs['sa_avg'] = scale * collapse_intensity[2]
+                gm_scale_group.attrs['scale_factor'] = scale * collapse_intensity[0]
+                gm_scale_group.attrs['sa_t1'] = scale * collapse_intensity[1]
+                gm_scale_group.attrs['sa_avg'] = scale * collapse_intensity[2]
 
         return gm_scale_group.name
+
+
+def collect_mainshock_data(gm_folder_path, mainshock_name, results_filename, mainshock_group):
+    gm_acc_file = posixpath.join(gm_folder_path, mainshock_name)
+    gm_info_file = posixpath.join(gm_folder_path, 'GMmainInfo.txt')
+
+    with h5py.File(results_filename, 'r+') as hf:
+        mainshock_group = hf[mainshock_group]
+        # store mainshock ground motion
+
+        if mainshock_name in mainshock_group.keys():
+            gm_mainshock_group = mainshock_group[mainshock_name]
+        else:
+            gm_mainshock_group = mainshock_group.create_group(mainshock_name)
+
+        # acceleration time history
+        with open(gm_acc_file, 'r') as file:
+            acc = np.array([float(x) for x in file.read().splitlines()])
+        dset = gm_mainshock_group.create_dataset('acceleration_time_history', data=acc)
+        dset.attrs['n_pts'] = len(acc)
+
+        file = open(gm_info_file, 'r')
+        content = file.read()
+        content_list = content.split("\t")
+        file.close
+        dset.attrs['dt'] = float(content_list[2])
+
+
+def collect_mainshock_data(gm_folder_path, mainshock_name, results_filename, mainshock_group):
+    gm_acc_file = posixpath.join(gm_folder_path, mainshock_name)
+    gm_info_file = posixpath.join(gm_folder_path, 'GMmainInfo.txt')
+
+    with h5py.File(results_filename, 'r+') as hf:
+        mainshock_group = hf[mainshock_group]
+        # store mainshock ground motion
+
+        if mainshock_name in mainshock_group.keys():
+            gm_mainshock_group = mainshock_group[mainshock_name]
+        else:
+            gm_mainshock_group = mainshock_group.create_group(mainshock_name)
+
+        # acceleration time history
+        with open(gm_acc_file, 'r') as file:
+            acc = np.array([float(x) for x in file.read().splitlines()])
+        dset = gm_mainshock_group.create_dataset('acceleration_time_history', data=acc)
+        dset.attrs['n_pts'] = len(acc)
+
+        file = open(gm_info_file, 'r')
+        content = file.read()
+        content_list = content.split("\t")
+        file.close
+        dset.attrs['dt'] = float(content_list[2])
 
 
 def collect_mainshock_edp_results(edp_folder, hf, building_group, edp_results_group):

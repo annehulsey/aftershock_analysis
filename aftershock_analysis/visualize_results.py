@@ -622,10 +622,10 @@ def plot_building_at_t(t, edp, columns, beams, plot_scale, ax):
 
     building_height = np.max(columns[:, :, 1])
     building_width = np.max(columns[:, :, 0])
-    y_gap = 100
-    x_gap = 500
+    y_gap = 150
+    x_gap = 100
     _ = ax.set_xlim(-x_gap, building_width + x_gap)
-    _ = ax.set_ylim(0, building_height + y_gap)
+    _ = ax.set_ylim(-y_gap, building_height + y_gap)
     _ = ax.axis('off')
     # _ = ax.text(building_width / 2, -y_gap, 'Displacement scale: ' + str(plot_scale) + 'x', ha='center', va='top',
     #             fontsize=18)
