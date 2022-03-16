@@ -7,8 +7,8 @@ import scipy.optimize as optimize
 import os
 import posixpath
 from functools import partial
-from sklearn.model_selection import RepeatedKFold
-import sklearn.linear_model as skl
+# from sklearn.model_selection import RepeatedKFold
+# import sklearn.linear_model as skl
 import scipy as sp
 import matplotlib as mpl
 import random
@@ -27,11 +27,11 @@ import matplotlib.animation as animation
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
 
-def set_plot_formatting():
+def set_plot_formatting(SMALL_SIZE, MEDIUM_SIZE, BIGGER_SIZE):
     # set up plot formatting
-    SMALL_SIZE = 12#12  15
-    MEDIUM_SIZE = 15#15  18
-    BIGGER_SIZE = 25#18  25
+    # SMALL_SIZE = 12#12  15
+    # MEDIUM_SIZE = 15#15  18
+    # BIGGER_SIZE = 25#18  25
 
     # plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
     # plt.rc('axes', titlesize=MEDIUM_SIZE)    # fontsize of the axes title
