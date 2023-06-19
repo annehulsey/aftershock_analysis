@@ -2530,6 +2530,8 @@ def get_beam_response(results_folder, beam_list, filenames, def_desired='rot'):
             print('ERROR: output not consistent with number of beams')
             print(file)
             print('n_cols = ' + str(n_cols) + '; num_beams = ' + str(num_beams))
+            beam_results = np.ones(num_beams) * np.nan
+            return beam_results
 
         # Initialize final matrix to return the results
         beam_results[file] = np.zeros([n_stories, n_bays])
@@ -2593,7 +2595,7 @@ def get_splice_response(results_folder, splice_list, column_list, filenames, res
                     aux = [abs(float(x)) for x in aux]  # convert to list of floats, empty "line" gives an error here
 
                     # Initialize max_res vector if not exist yet
-                    if max_res == 0:
+                    if type(max_res) == int:
                         max_res = np.zeros(len(aux))
 
                     # only keep row with complete data
@@ -2601,7 +2603,7 @@ def get_splice_response(results_folder, splice_list, column_list, filenames, res
                             (len(aux) == int(3 * num_splices)) or (len(aux) == int(6 * num_splices)) or
                             (len(aux) == int(num_splices))):
                         last_line = line
-                        max_res = np.max(max_res, aux, axis=0)
+                        max_res = np.max([max_res, aux], axis=0)
                     else:
                         last_line = last_line
                 except:
@@ -2985,11 +2987,11 @@ def collect_endStateXandY_response(model_name_all, save_results_folder_all, stri
         # print('num_pz='+str(num_pz))
 
         # # Removes existing file
-        if os.path.isfile(results_filename):
-            os.remove(results_filename)
-            print(results_filename + ' already exists, so deleted it')
+        # if os.path.isfile(results_filename):
+        #     os.remove(results_filename)
+        #     print(results_filename + ' already exists, so deleted it')
 
-        # if True: (Collects only data for those building without data)
+        # if True (Collects only data for those building without data)
         if not os.path.isfile(results_filename):
 
             # Collect results and store in HDF file
